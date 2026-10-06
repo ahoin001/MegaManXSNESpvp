@@ -2,6 +2,8 @@
 #include "mmx_netplay.h"
 #include "mod_runtime.h"
 #include "mmx_coop.h"
+#include "mmx_pvp.h"
+#include "mmx_versus.h"
 #include "mmx_weapons.h"
 #include <stdio.h>
 #include <string.h>
@@ -12,12 +14,22 @@
 static const char *const kCoop = "megaman-x.coop";
 static const char *const kZero = "megaman-x.character.zero";
 static const char *const kWide = "megaman-x.enhancement.widescreen";
+static const char *const kX2 = "megaman-x.weapons.x2";
+static const char *const kX3 = "megaman-x.weapons.x3";
 static const RecompLauncherCModProvider *s_mods;
 static const RecompLauncherCNetplayCallbacks *s_net;
 static RecompLauncherCModProvider s_provider;
 static RecompLauncherCNetplayCallbacks s_callbacks;
 static int s_active;
+static int s_versus;
 static char s_error[512];
+
+typedef struct VersusPick {
+  char name[64];
+  int w0, w1, w2;
+  int valid;
+} VersusPick;
+static VersusPick s_picks[8];
 
 int MmxNetplayActive(void) { return s_active; }
 
@@ -51,11 +63,26 @@ static void clear_error(void *ctx) {
   if (s_net->clear_last_error) s_net->clear_last_error(ctx);
 }
 
+static void enable_present_packs(void) {
+  static const char *const packages[] = {"megaman-x.weapons.x2", "megaman-x.weapons.x3"};
+  static const char *const roms[] = {"x2-rom", "x3-rom"};
+  int i;
+  if (!s_mods) return;
+  for (i = 0; i < 2; ++i) {
+    char path[4096];
+    path[0] = 0;
+    if (snes_mod_runtime_resource_path_c(packages[i], "weapons", roms[i], path, sizeof(path)) && path[0])
+      s_mods->feature_enable(s_mods->ctx, packages[i], "weapons", 1);
+  }
+}
+
 static void mode_changed(int enabled) {
   s_error[0] = 0;
   if (!enabled) {
     snes_mod_runtime_end_temporary_c();
     s_active = 0;
+    s_versus = 0;
+    memset(s_picks, 0, sizeof(s_picks));
     return;
   }
   if (s_active) return;
@@ -170,19 +197,220 @@ static int set_option(void *ctx, const char *pkg, const char *fid, const char *o
     }
     return 1;
   }
+  if (s_versus && !strcmp(pkg, kCoop) && !strcmp(option, "rules") && strcmp(value, "arena"))
+    return fail("Versus matches use Arena rules.");
   if (s_active && !strcmp(pkg, kWide) && !strcmp(option, "aspect") &&
       strcmp(value, "16:9") && strcmp(value, "21:9") && strcmp(value, "32:9"))
     return fail("Adaptive view is available offline. Choose a fixed ratio for netplay.");
   return s_mods->feature_set_option(ctx, pkg, fid, option, value);
 }
+
+static void remember_pick(const char *name, int w0, int w1, int w2) {
+  int slot = -1, i;
+  if (!name || !name[0] || !MmxPvpPickReady(w0, w1, w2)) return;
+  for (i = 0; i < 8; ++i) {
+    if (s_picks[i].name[0] && !strcmp(s_picks[i].name, name)) { slot = i; break; }
+    if (slot < 0 && !s_picks[i].name[0]) slot = i;
+  }
+  if (slot < 0) slot = 0;
+  snprintf(s_picks[slot].name, sizeof(s_picks[slot].name), "%s", name);
+  s_picks[slot].w0 = w0;
+  s_picks[slot].w1 = w1;
+  s_picks[slot].w2 = w2;
+  s_picks[slot].valid = 1;
+}
+static const VersusPick *find_pick(const char *name) {
+  int i;
+  if (!name || !name[0]) return NULL;
+  for (i = 0; i < 8; ++i)
+    if (s_picks[i].valid && !strcmp(s_picks[i].name, name)) return &s_picks[i];
+  return NULL;
+}
+static int chat_is_pick(void *ctx, int index) {
+  RecompLauncherCNetplayChatMessage msg;
+  int w0, w1, w2;
+  if (!s_net->chat_get || !s_net->chat_get(ctx, index, &msg)) return 0;
+  if (!MmxPvpParsePick(msg.text, &w0, &w1, &w2)) return 0;
+  remember_pick(msg.from, w0, w1, w2);
+  return 1;
+}
+static int chat_count(void *ctx) {
+  int n = s_net->chat_count ? s_net->chat_count(ctx) : 0, i, hidden = 0;
+  for (i = 0; i < n; ++i) if (chat_is_pick(ctx, i)) ++hidden;
+  return n - hidden;
+}
+static int chat_get(void *ctx, int index, RecompLauncherCNetplayChatMessage *out) {
+  int n = s_net->chat_count ? s_net->chat_count(ctx) : 0, i, seen = 0;
+  if (!out) return 0;
+  for (i = 0; i < n; ++i) {
+    if (chat_is_pick(ctx, i)) continue;
+    if (seen++ == index) return s_net->chat_get(ctx, i, out);
+  }
+  return 0;
+}
+static int member_get(void *ctx, int index, RecompLauncherCNetplayMember *out) {
+  const VersusPick *pick;
+  if (!s_net->member_get || !s_net->member_get(ctx, index, out)) return 0;
+  out->versus_character = out->slot == 0 ? 0 : 1;
+  pick = find_pick(out->display_name);
+  if (pick) {
+    out->versus_pick_valid = 1;
+    out->versus_weapon0 = pick->w0;
+    out->versus_weapon1 = pick->w1;
+    out->versus_weapon2 = pick->w2;
+  }
+  return 1;
+}
+static int leave(void *ctx) {
+  memset(s_picks, 0, sizeof(s_picks));
+  return s_net->leave ? s_net->leave(ctx) : 0;
+}
+static int lobby_is_arena(void *ctx) {
+  int n, i;
+  if (!s_net->lobby_mods_count || !s_net->lobby_mods_get) return 0;
+  n = s_net->lobby_mods_count(ctx);
+  for (i = 0; i < n; ++i) {
+    RecompLauncherCNetplayLobbyMod mod;
+    memset(&mod, 0, sizeof(mod));
+    if (!s_net->lobby_mods_get(ctx, i, &mod)) continue;
+    if (strstr(mod.options, "rules=arena")) return 1;
+  }
+  return 0;
+}
+static int versus_active(void *ctx) {
+  return s_versus || lobby_is_arena(ctx);
+}
+static int versus_begin(void *ctx) {
+  (void)ctx;
+  s_versus = 1;
+  memset(s_picks, 0, sizeof(s_picks));
+  MmxVersusRetryAssets();
+  mode_changed(1);
+  if (!s_mods) return 0;
+  s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
+  s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
+  return 1;
+}
+static int versus_campaign(void *ctx) {
+  (void)ctx;
+  s_versus = 0;
+  memset(s_picks, 0, sizeof(s_picks));
+  if (s_mods && s_active)
+    s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "campaign");
+  return 1;
+}
+static int pack_listed(void *ctx, const char *package, const char *rom) {
+  int n, i;
+  char path[4096];
+  path[0] = 0;
+  if (snes_mod_runtime_feature_enabled_c(package, "weapons")) return 1;
+  if (snes_mod_runtime_resource_path_c(package, "weapons", rom, path, sizeof(path)) && path[0]) return 1;
+  if (!s_net->lobby_mods_count || !s_net->lobby_mods_get) return 0;
+  n = s_net->lobby_mods_count(ctx);
+  for (i = 0; i < n; ++i) {
+    RecompLauncherCNetplayLobbyMod mod;
+    memset(&mod, 0, sizeof(mod));
+    if (s_net->lobby_mods_get(ctx, i, &mod) && strstr(mod.id, package)) return 1;
+  }
+  return 0;
+}
+static int versus_weapon_count(void *ctx) {
+  return MmxVersusWeaponCount(pack_listed(ctx, kX2, "x2-rom"), pack_listed(ctx, kX3, "x3-rom"));
+}
+static int versus_weapon_get(void *ctx, int index, RecompLauncherCVersusWeapon *out) {
+  MmxVersusWeapon weapon;
+  if (!out || !MmxVersusWeaponGet(pack_listed(ctx, kX2, "x2-rom"), pack_listed(ctx, kX3, "x3-rom"), index, &weapon))
+    return 0;
+  memset(out, 0, sizeof(*out));
+  out->id = weapon.id;
+  snprintf(out->name, sizeof(out->name), "%s", weapon.name);
+  snprintf(out->blurb, sizeof(out->blurb), "%s", weapon.blurb);
+  out->has_demo = weapon.has_demo;
+  return 1;
+}
+static int versus_pose(void *ctx, int weapon_id, unsigned tick, RecompLauncherCVersusPose *out) {
+  (void)ctx;
+  if (!out) return 0;
+  memset(out, 0, sizeof(*out));
+  return MmxVersusPose(weapon_id, tick, &out->width, &out->height, &out->pixels, &out->colors);
+}
+static int versus_pick_set(void *ctx, int w0, int w1, int w2) {
+  char line[80];
+  const char *name = s_net->player_name ? s_net->player_name(ctx) : "";
+  if (!MmxPvpPickReady(w0, w1, w2)) return 0;
+  remember_pick(name, w0, w1, w2);
+  snprintf(line, sizeof(line), "%s%d %d %d", MMX_PVP_PICK_PREFIX, w0, w1, w2);
+  if (s_net->chat_send) s_net->chat_send(ctx, line);
+  return 1;
+}
+static int versus_behavior_get(void *ctx, char *out, size_t cap) {
+  (void)ctx;
+  if (!out || !cap) return 0;
+  out[0] = 0;
+  return snes_mod_runtime_feature_option_value_c(kCoop, "coop", "behavior", out, (uint32_t)cap);
+}
+static int versus_behavior_set(void *ctx, const char *value) {
+  int ok = set_option(ctx, kCoop, "coop", "behavior", value);
+  if (ok && s_net->push_match_caps) s_net->push_match_caps(ctx);
+  return ok;
+}
+static int versus_picks_ready(void *ctx) {
+  int got[2] = {0, 0}, n, i;
+  if (!versus_active(ctx)) return 1;
+  n = s_net->member_count ? s_net->member_count(ctx) : 0;
+  for (i = 0; i < n; ++i) {
+    RecompLauncherCNetplayMember member;
+    if (!member_get(ctx, i, &member)) continue;
+    if (member.slot < 0 || member.slot > 1 || !member.display_name[0]) continue;
+    if (!member.versus_pick_valid) return 0;
+    got[member.slot] = 1;
+  }
+  return got[0] && got[1];
+}
 static int commit_netplay(void *ctx, const char *rom) {
-  return validate_plan() && s_mods->commit(ctx, rom);
+  int armed = 0;
+  if (!validate_plan()) return 0;
+  if (versus_active(ctx)) {
+    uint8_t character[2] = {0, 1};
+    uint8_t loadout[2][MMX_PVP_LOADOUT_SLOTS];
+    int got[2] = {0, 0}, n, i;
+    memset(loadout, 0, sizeof(loadout));
+    if (s_net->is_host && s_net->is_host(ctx) && s_mods) {
+      s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
+      s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
+    }
+    n = s_net->member_count ? s_net->member_count(ctx) : 0;
+    for (i = 0; i < n; ++i) {
+      RecompLauncherCNetplayMember member;
+      if (!member_get(ctx, i, &member) || member.slot < 0 || member.slot > 1) continue;
+      if (!member.display_name[0] || !member.versus_pick_valid)
+        return fail("Both players need three weapons before the match can start.");
+      loadout[member.slot][0] = (uint8_t)member.versus_weapon0;
+      loadout[member.slot][1] = (uint8_t)member.versus_weapon1;
+      loadout[member.slot][2] = (uint8_t)member.versus_weapon2;
+      got[member.slot] = 1;
+    }
+    if (!got[0] || !got[1])
+      return fail("Both players need three weapons before the match can start.");
+    MmxPvpArmLaunch(character, loadout);
+    armed = 1;
+  }
+  if (!s_mods->commit(ctx, rom)) {
+    if (armed) MmxPvpClearArm();
+    return 0;
+  }
+  return 1;
 }
 static int no(void *ctx) { (void)ctx; return 0; }
 static int create(void *ctx, const char *name, char *endpoint, const char *password,
                    const RecompLauncherCSettings *settings, int lan, int slots) {
   (void)slots;
   mode_changed(1);
+  if (s_versus && s_mods) {
+    s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
+    s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
+    enable_present_packs();
+  }
   if (!validate_plan()) return -1;
   if (s_net->allow_spectators_set) s_net->allow_spectators_set(ctx, 0);
   return s_net->create(ctx, name, endpoint, password, settings, lan, 2);
@@ -212,6 +440,20 @@ void MmxNetplayConfigureLauncher(RecompLauncherCGameInfo *info) {
   s_callbacks = *s_net;
   s_callbacks.create = create;
   s_callbacks.fill_launch = fill_launch;
+  s_callbacks.member_get = member_get;
+  s_callbacks.chat_count = chat_count;
+  s_callbacks.chat_get = chat_get;
+  s_callbacks.leave = leave;
+  s_callbacks.versus_active = versus_active;
+  s_callbacks.versus_begin = versus_begin;
+  s_callbacks.versus_campaign = versus_campaign;
+  s_callbacks.versus_weapon_count = versus_weapon_count;
+  s_callbacks.versus_weapon_get = versus_weapon_get;
+  s_callbacks.versus_pose = versus_pose;
+  s_callbacks.versus_pick_set = versus_pick_set;
+  s_callbacks.versus_behavior_get = versus_behavior_get;
+  s_callbacks.versus_behavior_set = versus_behavior_set;
+  s_callbacks.versus_picks_ready = versus_picks_ready;
   s_callbacks.last_error = net_error;
   s_callbacks.clear_last_error = clear_error;
   s_callbacks.allow_spectators_get = NULL;

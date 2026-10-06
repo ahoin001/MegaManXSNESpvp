@@ -33,6 +33,9 @@ const uint8_t *MmxWeaponsAnimation(unsigned page, unsigned weapon, unsigned grou
 const uint16_t *MmxWeaponsPalette(unsigned page, unsigned weapon, bool body);
 const uint16_t *MmxWeaponsGroupPalette(unsigned page,unsigned weapon,unsigned group);
 const char *MmxWeaponsLabel(unsigned page, unsigned weapon);
+/* One projectile frame from the extracted cache. 0 when that page is not loaded. */
+bool MmxWeaponsDemoFrame(unsigned page, unsigned weapon, unsigned tick,
+                         const MmxWeaponPose **pose, const uint16_t **colors);
 bool MmxWeaponsMenuVisible(const uint8_t ram[0x20000]);
 void MmxWeaponsMenuTick(uint8_t ram[0x20000], unsigned direct_page);
 unsigned MmxWeaponsMenuRead(uint8_t ram[0x20000], unsigned pc, unsigned direct_page,

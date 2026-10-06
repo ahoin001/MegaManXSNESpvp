@@ -1,5 +1,6 @@
 #include "mmx_weapon_combat.h"
 #include "mmx_weapons.h"
+#include "mmx_pvp.h"
 #include "mmx_zero.h"
 #include <string.h>
 
@@ -167,6 +168,21 @@ static void animation_step(MmxWeaponShot *s) {
 }
 static void cycle_weapon(uint8_t *r) {
   MmxWeaponsState s=MmxWeaponsGetState();
+  if (MmxPvpRestrictsLoadout()) {
+    unsigned held=r[0xbde]&0x30,pressed=r[0xbe2]&0x30,page=0,weapon=0;
+    r[0xbe2]&=(uint8_t)~0x30;
+    if (!pressed || r[0xd1]!=2 || r[0xd2]!=4 || r[0xd3]!=4 || r[0xba9]!=2 ||
+        r[0x1f23] || r[0xbdd] || r[0x1f31] || r[0xbaa]==0x18 || r[0xbaa]==0x42) return;
+    if (held==0x30) { page=0; weapon=0; }
+    else if (!MmxPvpCycleWeapon(MmxPvpActiveSeat(), s.page, s.weapon,
+                                (pressed&0x20) ? -1 : 1, &page, &weapon)) return;
+    if (page==s.page && weapon==s.weapon) return;
+    MmxZeroCancel(r); stop_charge(r); MmxWeaponsCancelShots(r);
+    s.page=(uint8_t)page; s.menu_page=(uint8_t)page; s.weapon=(uint8_t)weapon;
+    s.charge=s.cooldown=0; MmxWeaponsSetState(s);
+    r[0xbdb]=page ? 0 : (uint8_t)weapon; r[0xc0f]=3; r[0x1f12]=weapon ? 0 : 4;
+    return;
+  }
   if (!s.page) return; /* X1 keeps its native ownership-aware cycle. */
   unsigned held=r[0xbde]&0x30,pressed=r[0xbe2]&0x30;
   /* Consume shoulders even for the buster and unfinished weapons. Native

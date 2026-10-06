@@ -1,0 +1,157 @@
+#include "mmx_pvp.h"
+
+#include <assert.h>
+#include <string.h>
+
+static void test_shot_hit_and_miss(void) {
+  MmxPvpHitActor actors[2];
+  memset(actors, 0, sizeof(actors));
+  actors[0].x = 100; actors[0].y = 100; actors[0].hp = 10;
+  actors[1].x = 400; actors[1].y = 100; actors[1].hp = 10;
+  actors[0].shots[0].active = 1;
+  actors[0].shots[0].x = 400;
+  actors[0].shots[0].y = 90;
+  assert(MmxPvpExchange(actors) == -1);
+  assert(actors[1].hp == 9);
+  assert(actors[0].hp == 10);
+  assert(actors[0].shots[0].hit == 1);
+  /* The same shot cannot hit again until it leaves. */
+  assert(MmxPvpExchange(actors) == -1);
+  assert(actors[1].hp == 9);
+  actors[0].shots[0].x = 800;
+  actors[0].shots[0].hit = 0;
+  actors[1].hurt = 0;
+  assert(MmxPvpExchange(actors) == -1);
+  assert(actors[1].hp == 9);
+}
+
+static void test_ko_reset_and_match(void) {
+  MmxPvpState match;
+  MmxPvpHitActor actors[2];
+  int x0, y0, x1, y1, i;
+  uint8_t hp0, hp1;
+  MmxPvpInit(&match);
+  match.baseline_hp = 16;
+  MmxPvpBuildArena(1000, 500, 1040, 500, 0, 4000, 0, 4000, &match.arena);
+  memset(actors, 0, sizeof(actors));
+  actors[0].x = 100; actors[0].y = 100; actors[0].hp = 10;
+  actors[1].x = 400; actors[1].y = 100; actors[1].hp = 1;
+  actors[0].shots[0].active = 1;
+  actors[0].shots[0].special = 1;
+  actors[0].shots[0].x = 400;
+  actors[0].shots[0].y = 90;
+  assert(MmxPvpExchange(actors) == 1);
+  assert(actors[1].hp == 0);
+  assert(MmxPvpRegisterKo(&match, 1));
+  assert(match.wins[0] == 1);
+  assert(match.phase == MMX_PVP_ROUND_END);
+  for (i = 0; i < MMX_PVP_ROUND_HOLD - 1; ++i) assert(MmxPvpTickClock(&match) == 0);
+  assert(MmxPvpTickClock(&match) == 1);
+  assert(match.phase == MMX_PVP_FIGHT);
+  MmxPvpApplySpawns(&match, &x0, &y0, &x1, &y1, &hp0, &hp1);
+  assert(hp0 == 16 && hp1 == 16);
+  assert(x0 == match.arena.spawn_x[0] && x1 == match.arena.spawn_x[1]);
+  assert(x0 != x1);
+  assert(MmxPvpRegisterKo(&match, 1));
+  assert(match.wins[0] == 2);
+  for (i = 0; i < MMX_PVP_ROUND_HOLD; ++i) assert(MmxPvpTickClock(&match) == 0);
+  assert(match.phase == MMX_PVP_MATCH_END);
+  assert(match.phase != MMX_PVP_FIGHT);
+}
+
+static void test_cooldown_keeps_energy(void) {
+  MmxPvpState match;
+  unsigned energy = 28 * 256;
+  unsigned i;
+  MmxPvpInit(&match);
+  match.loadout[0][0] = 1;
+  match.loadout[0][1] = 2;
+  match.loadout[0][2] = 3;
+  assert(!MmxPvpTryFire(&match, 0, 4, &energy));
+  assert(energy == 28 * 256);
+  assert(MmxPvpTryFire(&match, 0, 1, &energy));
+  assert(energy == 28 * 256);
+  assert(match.cooldown[0][1] > 0);
+  assert(!MmxPvpTryFire(&match, 0, 1, &energy));
+  assert(energy == 28 * 256);
+  for (i = 0; match.cooldown[0][1]; ++i) {
+    assert(i < 300);
+    MmxPvpTickCooldowns(&match);
+  }
+  assert(MmxPvpTryFire(&match, 0, 1, &energy));
+  assert(energy == 28 * 256);
+  assert(MmxPvpTryFire(&match, 0, 0, &energy));
+}
+
+static void test_open_loadout_and_clamp(void) {
+  MmxPvpState match;
+  MmxPvpBox box;
+  int x, y, inside_x, inside_y;
+  unsigned energy = 10;
+  MmxPvpInit(&match);
+  assert(MmxPvpTryFire(&match, 0, 4, &energy));
+  assert(energy == 10);
+  MmxPvpBuildArena(1000, 500, 1040, 500, 0, 4000, 0, 4000, &box);
+  assert(box.spawn_x[0] < box.spawn_x[1]);
+  assert(box.spawn_x[0] >= box.left && box.spawn_x[1] <= box.right);
+  x = box.left - 20;
+  y = box.bottom + 30;
+  MmxPvpClampPoint(&box, &x, &y);
+  assert(x == box.left && y == box.bottom);
+  inside_x = box.left + 10;
+  inside_y = box.top + 10;
+  MmxPvpClampPoint(&box, &inside_x, &inside_y);
+  assert(inside_x == box.left + 10 && inside_y == box.top + 10);
+}
+
+static void test_versus_kit_and_boot(void) {
+  MmxPvpState match;
+  uint8_t character[2] = {0, 1};
+  uint8_t kit[2][3] = {{1, 2, 3}, {0x11, 0x12, 0x13}};
+  unsigned page = 9, weapon = 9;
+  int w0 = 0, w1 = 0, w2 = 0;
+  MmxPvpArmLaunch(character, kit);
+  assert(MmxPvpLaunchArmed());
+  MmxPvpEnable();
+  assert(!MmxPvpLaunchArmed());
+  assert(MmxPvpRestrictsLoadout());
+  match = MmxPvpGetState();
+  assert(match.character[0] == 0 && match.character[1] == 1);
+  assert(match.loadout[0][0] == 1 && match.loadout[0][2] == 3);
+  assert(match.loadout[1][0] == 0x11 && match.loadout[1][2] == 0x13);
+  assert(MmxPvpCycleWeapon(0, 0, 0, 1, &page, &weapon));
+  assert(page == 0 && weapon == 1);
+  assert(MmxPvpCycleWeapon(0, 0, 3, 1, &page, &weapon));
+  assert(page == 0 && weapon == 0);
+  assert(MmxPvpCycleWeapon(0, 0, 4, 1, &page, &weapon));
+  assert(page == 0 && weapon == 1);
+  assert(MmxPvpCycleWeapon(1, 1, 1, -1, &page, &weapon));
+  assert(page == 0 && weapon == 0);
+  assert(MmxPvpBootWantsStart(120, 0));
+  assert(MmxPvpBootWantsStart(240, 0));
+  assert(MmxPvpBootWantsStart(400, 0));
+  assert(MmxPvpBootWantsStart(560, 0));
+  assert(MmxPvpBootWantsStart(720, 0));
+  assert(!MmxPvpBootWantsStart(121, 0));
+  assert(!MmxPvpBootWantsStart(120, 1));
+  assert(MmxPvpParsePick("[[mmxpvp]] 1 2 3", &w0, &w1, &w2));
+  assert(w0 == 1 && w1 == 2 && w2 == 3);
+  assert(MmxPvpPickReady(1, 2, 3));
+  assert(MmxPvpPickReady(0x11, 0x12, 0x21));
+  assert(!MmxPvpPickReady(1, 1, 2));
+  assert(!MmxPvpPickReady(0, 1, 2));
+  assert(!MmxPvpParsePick("hello", &w0, &w1, &w2));
+  MmxPvpClearArm();
+  MmxPvpEnable();
+  assert(!MmxPvpRestrictsLoadout());
+  assert(!MmxPvpBootWantsStart(120, 0));
+}
+
+int main(void) {
+  test_shot_hit_and_miss();
+  test_ko_reset_and_match();
+  test_cooldown_keeps_energy();
+  test_open_loadout_and_clamp();
+  test_versus_kit_and_boot();
+  return 0;
+}

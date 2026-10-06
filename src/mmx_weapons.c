@@ -1,5 +1,6 @@
 #include "mmx_weapons.h"
 #include "mmx_weapon_combat.h"
+#include "mmx_pvp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -155,6 +156,40 @@ const char *MmxWeaponsLabel(unsigned page, unsigned weapon) {
       "ACID.B", "P.BOMB", "T.THUNDR", "S.BLADE", "R.SPLASH", "G.WELL", "F.SHIELD", "T.FANG"};
   return valid_weapon(page, weapon) ? labels[weapon_index(page, weapon)] : "";
 }
+bool MmxWeaponsDemoFrame(unsigned page, unsigned weapon, unsigned tick,
+                         const MmxWeaponPose **pose, const uint16_t **colors) {
+  const WeaponArt *w;
+  const WeaponGroup *g;
+  const uint8_t *data;
+  unsigned size, offset, guard, steps;
+  if (!pose || !colors || !valid_weapon(page, weapon) || !MmxWeaponsPageEnabled(page)) return false;
+  w = art + weapon_index(page, weapon);
+  if (!w->groups || !w->group[0].animation || w->group[0].animation_size < 5) return false;
+  g = w->group;
+  data = g->animation;
+  size = g->animation_size;
+  if (word(data) < 2 || word(data) + 3 > size) return false;
+  offset = word(data);
+  steps = tick;
+  for (guard = 0; steps && guard < 64; ++guard) {
+    unsigned timer, next;
+    if (offset + 3 > size || !data[offset]) break;
+    timer = data[offset];
+    if (steps < timer) break;
+    steps -= timer;
+    next = offset + 3;
+    if (data[offset + 1] & 128) {
+      if (next + 2 > size) break;
+      next = (unsigned)((int)next + (int16_t)word(data + next));
+    }
+    if (next + 3 > size) break;
+    offset = next;
+  }
+  if (offset + 3 > size || data[offset + 2] >= g->count || !g->pose[data[offset + 2]].pixels) return false;
+  *pose = &g->pose[data[offset + 2]];
+  *colors = g->colors;
+  return true;
+}
 unsigned MmxWeaponsEnergyRead(unsigned address, unsigned original) {
   if (!MmxWeaponsActive()) return original;
   if (address == 0xbdb) return 2; /* HUD/pickup routines only: virtual inventory index. */
@@ -170,6 +205,8 @@ unsigned MmxWeaponsEnergyAmount(unsigned page, unsigned weapon) {
   return MmxWeaponsPageEnabled(page) && valid_weapon(page,weapon) ? energy_amount(weapon_index(page,weapon)) : 0;
 }
 bool MmxWeaponsSpend(unsigned page, unsigned weapon, unsigned cost) {
+  if (MmxPvpEnabled())
+    return MmxPvpCommitSpend(MmxPvpActiveSeat(), (page << 4) | (weapon & 15));
   if (!MmxWeaponsPageEnabled(page) || !valid_weapon(page,weapon)) return false;
   unsigned i = weapon_index(page,weapon), value = energy_amount(i);
   if (cost > value) return false;
@@ -210,6 +247,18 @@ void MmxWeaponsMenuTick(uint8_t r[0x20000], unsigned dp) {
   if (!MmxWeaponsEnabled() || !r || dp > 0x1ff00) return;
   unsigned button = r[0xbe2] & 0x30;
   if (button != 0x10 && button != 0x20) return;
+  if (MmxPvpRestrictsLoadout()) {
+    unsigned page, weapon;
+    if (MmxPvpCycleWeapon(MmxPvpActiveSeat(), state.page, state.weapon, button == 0x20 ? -1 : 1, &page, &weapon)) {
+      state.page = state.menu_page = (uint8_t)page;
+      state.weapon = (uint8_t)weapon;
+      state.charge = state.cooldown = 0;
+    }
+    unsigned index = r[0xba3] & 0x1e;
+    r[0xb72 + index] = 0x2c; r[0xb73 + index] = 0; r[0xba3] = (uint8_t)((index + 2) & 0x1e);
+    r[0xbe2] &= (uint8_t)~0x30;
+    return;
+  }
   do { state.menu_page = (uint8_t)((state.menu_page + (button == 0x10 ? 1 : 2)) % 3); }
   while (state.menu_page && !MmxWeaponsPageEnabled(state.menu_page));
   unsigned cursor = r[dp + 10];
@@ -229,6 +278,12 @@ unsigned MmxWeaponsMenuRead(uint8_t r[0x20000], unsigned pc, unsigned dp, unsign
       return state.menu_page ? (state.page == state.menu_page ? state.weapon * 2 : 0) : original;
     case 0xce28: {
       unsigned cursor = r[dp + 10], old_page = state.page;
+      if (MmxPvpRestrictsLoadout() && cursor < 9) {
+        unsigned id = state.menu_page ? ((state.menu_page << 4) | cursor) : cursor;
+        MmxPvpState snap = MmxPvpGetState();
+        if (cursor && !MmxPvpLoadoutAllows(snap.loadout[MmxPvpActiveSeat()], id))
+          return state.page ? state.weapon * 2 : original;
+      }
       if (cursor < 9) {
         MmxWeaponsCancelShots(r);
         if (old_page || state.menu_page) r[0x1f12] = 0; /* Rebuild the native energy HUD. */

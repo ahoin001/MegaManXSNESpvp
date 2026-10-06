@@ -8,6 +8,7 @@
 #include "mmx_knc_bugfix.h"
 #include "mmx_coop_trace.h"
 #include "mmx_coop_view.h"
+#include "mmx_pvp.h"
 #include "variables.h"
 #include "common_cpu_infra.h"
 #include "snes/snes.h"
@@ -364,7 +365,7 @@ void mmx_host_yield(uint8_t countdown) {
 #include "snes/saveload.h"
 
 #define MMX_SAV_CHUNK_MAGIC   0x4D4D5854u  /* "MMXT" */
-#define MMX_SAV_CHUNK_VERSION 17u /* KNC Bugfix */
+#define MMX_SAV_CHUNK_VERSION 18u /* Arena PvP */
 
 typedef struct MmxSavChunk {
   uint32_t magic, version;
@@ -400,6 +401,7 @@ static MmxWeaponCombatState g_load_weapon_combat;
 static MmxCoopState g_load_coop;
 static MmxKncBugfixState g_load_knc_bugfix;
 static MmxCoopViewWorldState g_load_views;
+static MmxPvpState g_load_pvp;
 
 void MmxStateSaveExtra(struct SaveLoadInfo *sli) {
   MmxSavChunk c;
@@ -447,6 +449,10 @@ void MmxStateSaveExtra(struct SaveLoadInfo *sli) {
   }
   MmxKncBugfixState knc_bugfix=MmxKncBugfixGetState();
   sli->func(sli,&knc_bugfix,sizeof(knc_bugfix));
+  if (c.version >= 18) {
+    MmxPvpState pvp = MmxPvpGetState();
+    sli->func(sli, &pvp, sizeof(pvp));
+  }
 }
 
 void MmxStateLoadExtra(struct SaveLoadInfo *sli, uint32_t version) {
@@ -459,6 +465,7 @@ void MmxStateLoadExtra(struct SaveLoadInfo *sli, uint32_t version) {
   memset(&g_load_coop, 0, sizeof(g_load_coop));
   memset(&g_load_knc_bugfix,0,sizeof(g_load_knc_bugfix));
   memset(&g_load_views,0,sizeof(g_load_views));
+  memset(&g_load_pvp,0,sizeof(g_load_pvp));
   memset(&g_load_chunk, 0, sizeof(g_load_chunk));
   sli->func(sli, &g_load_chunk, sizeof(g_load_chunk));
   if (g_load_chunk.magic == MMX_SAV_CHUNK_MAGIC &&
@@ -530,6 +537,12 @@ void MmxStateLoadExtra(struct SaveLoadInfo *sli, uint32_t version) {
       if(!MmxKncBugfixValidState(&g_load_knc_bugfix)) g_load_chunk_ok=0;
     } else g_load_chunk_ok=0;
   }
+  if(g_load_complete && g_load_chunk.version>=18) {
+    if(RtlStateBytesRemaining(sli)>=sizeof(g_load_pvp)) {
+      sli->func(sli,&g_load_pvp,sizeof(g_load_pvp));
+      if(!MmxPvpValidState(&g_load_pvp)) g_load_chunk_ok=0;
+    } else g_load_chunk_ok=0;
+  }
   if(g_load_complete && g_load_chunk.version<16)
     g_load_views.contact_player=g_load_coop.anchor;
   if (!g_load_chunk_ok)
@@ -564,6 +577,7 @@ void MmxOnStateLoaded(uint32_t version) {
   MmxWeaponsSetCombatState(g_load_weapon_combat);
   if (complete && g_load_chunk.version >= 14) MmxCoopSetState(&g_load_coop);
   else MmxCoopReset();
+  if (complete && g_load_chunk.version >= 18) MmxPvpApplyLoaded(&g_load_pvp);
   MmxCoopViewsSetWorldState(&g_load_views);
   MmxCoopTraceStateLoaded();
   if (version < 5 || !g_load_chunk_ok) {
@@ -967,6 +981,9 @@ void RunOneFrameOfGame(void) {
       s_prev = onscreen;
     }
 #endif
+    if (MmxPvpBootWantsStart((unsigned)snes_frame_counter,
+            g_ram[0xd1] == 2 && g_ram[0xd2] == 4 && g_ram[0xba9] == 2))
+      RtlSetPadState(0, (uint16)(RtlGetPadState(0) | (1u << 3)));
     g_snes->inNmi = true;
     /* Option-1 cpu->S ABI: model the hardware NMI-entry push so the
      * handler's RTI has a frame to pop (paired with cpu_state.h's RTI

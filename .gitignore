@@ -52,6 +52,9 @@ memory/
 __pycache__/
 *.pyc
 
+# Local knowledge graph. Regenerated with graphify; not part of the game.
+/graphify-out/
+
 # Local-only config overrides (per-developer, applied after smw.ini)
 smw.local.ini
 

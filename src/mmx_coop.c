@@ -1,4 +1,5 @@
 #include "mmx_coop.h"
+#include "mmx_pvp.h"
 #include "mmx_coop_view.h"
 #include "mmx_renderer.h"
 #include "mmx_coop_trace.h"
@@ -324,7 +325,7 @@ bool MmxCoopEnable(unsigned character) {
   if (character > MMX_COOP_ZERO || !MmxZeroEnabled()) return false;
   starting_character = character; enabled = true; MmxCoopReset(); return true;
 }
-void MmxCoopDisable(void) { enabled = false; starting_character = 0; MmxCoopReset(); }
+void MmxCoopDisable(void) { enabled = false; starting_character = 0; MmxPvpDisable(); MmxCoopReset(); }
 MmxCoopState MmxCoopGetState(void) { return state; }
 bool MmxCoopValidState(const MmxCoopState *s) {
   if (!s || s->initialized > 1 || s->current > 1 || s->controller_pass > 2 ||
@@ -458,6 +459,57 @@ void MmxCoopInitialize(uint8_t *r) {
   MmxWeaponsPartnerCombat(&partner->combat);
 }
 static void lift_close(void);
+static void pvp_prepare_seat(uint8_t *r, unsigned seat) {
+  MmxCoopPlayer *p;
+  unsigned n;
+  if (!MmxPvpEnabled() || !state.initialized || seat > 1 || !r) return;
+  MmxPvpSetActiveSeat(seat);
+  p = &state.players[seat];
+  for (n = 1; n < 16; n += 2) p->energy[n] = 28;
+  if (MmxPvpInputLocked()) { p->input = 0; p->pressed = 0; }
+  if (seat != state.current) return;
+  memset(p->weapons.energy, 28, sizeof(p->weapons.energy));
+  memset(p->weapons.fraction, 0, sizeof(p->weapons.fraction));
+  p->weapons.initialized = 1;
+  MmxWeaponsSetState(p->weapons);
+  for (n = 0; n < 16; ++n)
+    r[0x1f87 + n] = p->energy[n] | ((n & 1) ? r[0x1f87 + n] & 0xc0 : 0);
+  if (MmxPvpInputLocked()) r[0xbde] = r[0xbdf] = r[0xbe2] = r[0xbe3] = 0;
+}
+static void pvp_frame(uint8_t *r) {
+  MmxPvpLiveSeat seats[2];
+  MmxPvpState snap;
+  unsigned i, n;
+  if (!MmxPvpEnabled() || !state.initialized || state.menu_owner || state.scene_owner) return;
+  if (r[0xd1] != 2 || r[0xd2] != 4 || r[0xd3] != 4) return;
+  for (i = 0; i < 2; ++i) {
+    seats[i].body = state.players[i].body;
+    seats[i].shots = state.players[i].shots;
+    seats[i].combat = &state.players[i].combat;
+    seats[i].weapons = &state.players[i].weapons;
+    seats[i].status = state.players[i].status;
+    for (n = 1; n < 16; n += 2) state.players[i].energy[n] = 28;
+  }
+  MmxPvpSimulate(seats, (int16_t)word(r + 0x1e56), (int16_t)word(r + 0x1e58),
+      (int16_t)word(r + 0x1e5a), (int16_t)word(r + 0x1e5c), r[0x1f7a], r[0x1f9a] & 127);
+  snap = MmxPvpGetState();
+  if (!snap.arena_ready) return;
+  putword(r + 0x1e4d, (unsigned)(uint16_t)snap.arena.camera_x);
+  putword(r + 0x1e50, (unsigned)(uint16_t)snap.arena.camera_y);
+  putword(r + 0x1e56, (unsigned)(uint16_t)snap.arena.camera_x);
+  putword(r + 0x1e58, (unsigned)(uint16_t)snap.arena.camera_x);
+  putword(r + 0x1e5a, (unsigned)(uint16_t)snap.arena.camera_y);
+  putword(r + 0x1e5c, (unsigned)(uint16_t)snap.arena.camera_y);
+  if (snap.baseline_hp) r[0x1f9a] = snap.baseline_hp;
+  memcpy(r + 0xba8, state.players[state.current].body, sizeof(state.players[state.current].body));
+  memcpy(r + 0x1228, state.players[state.current].shots, sizeof(state.players[state.current].shots));
+  for (n = 0; n < 16; ++n)
+    r[0x1f87 + n] = state.players[state.current].energy[n] |
+        ((n & 1) ? r[0x1f87 + n] & 0xc0 : 0);
+  MmxWeaponsSetState(state.players[state.current].weapons);
+  MmxWeaponsSetCombatState(state.players[state.current].combat);
+  MmxWeaponsPartnerCombat(&state.players[state.current ^ 1].combat);
+}
 bool MmxCoopFrameTick(uint8_t *r) {
   if (!enabled || !state.initialized) return MmxWeaponsFrameTick(r);
   lift_close(); /* an elevator query never spans a frame */
@@ -550,6 +602,7 @@ bool MmxCoopFrameTick(uint8_t *r) {
   for (unsigned seat=0;seat<2;++seat) if (state.players[seat].status==MMX_COOP_ALIVE &&
       (!state.scene_owner || seat==state.anchor)) {
     MmxCoopSelect(r,seat);
+    if (MmxPvpEnabled()) MmxPvpSetActiveSeat(seat);
     MmxWeaponsFrameTick(r);
     MmxCoopCapture(r);
     phases[seat]=MmxWeaponsTimePhase(&state.players[seat].combat);
@@ -561,6 +614,7 @@ bool MmxCoopFrameTick(uint8_t *r) {
   bool frozen=phases[0]==1 || phases[1]==1 ||
       ((phases[0]==2 || phases[1]==2) && !(state.time_tick&1));
   if (frozen) r[0xb9d]=r[0xba0]=0;
+  if (!frozen) pvp_frame(r);
   return frozen;
 }
 void MmxCoopPoll(uint16_t p1, uint16_t p2) {
@@ -573,6 +627,7 @@ void MmxCoopPoll(uint16_t p1, uint16_t p2) {
 }
 void MmxCoopApplyInput(uint8_t *r) {
   if (!enabled || !state.initialized || !r) return;
+  if (MmxPvpEnabled()) pvp_prepare_seat(r, state.current);
   unsigned input = state.players[state.current].input, native = 0;
   for (unsigned bit = 0; bit < 12; ++bit) if (input & (1u << bit)) native |= 0x8000u >> bit;
   /* $00:E543..E5F6: preserve X1's configurable button masks at $7E:FFC0..5.
@@ -1726,6 +1781,13 @@ static bool shared_screen(void) {
 }
 static void constrain_player(uint8_t *r) {
   bool independent=MmxCoopViewsOnline();
+  if (MmxPvpArenaReady()) {
+    int x=(int16_t)word(r+0xbad), y=(int16_t)word(r+0xbb0), ox=x, oy=y;
+    MmxPvpClampBody(&x, &y);
+    if (x!=ox) { putword(r+0xbad,(unsigned)x); r[0xbac]=0; putword(r+0xbc2,0); }
+    if (y!=oy) putword(r+0xbb0,(unsigned)y);
+    return;
+  }
   if(independent || shared_screen()) {
     if(state.scene_owner || state.menu_owner || r[0xd3]!=4) return;
     /* Native camera clamping only sees the world actor. Clamp each
@@ -1750,6 +1812,19 @@ static void constrain_player(uint8_t *r) {
   if (limited!=x) {putword(r+0xbad,(unsigned)limited);r[0xbac]=0;putword(r+0xbc2,0);}
 }
 static void camera_hook(CpuState *cpu,uint32_t pc) {
+  if (MmxPvpArenaReady()) {
+    int follow_x=0, follow_y=0;
+    MmxPvpFollowTarget(&follow_x, &follow_y);
+    /* Arena play stays in the box. Skip the pit check that belongs to scrolling stages. */
+    if ((pc&65535)==0xe12d) return;
+    {
+      unsigned axis=((pc&65535)==0xdebf || (pc&65535)==0xdeca) ? 8 : 5;
+      cpu->A=(uint16_t)(axis==8 ? follow_y : follow_x);
+      cpu->_flag_N=(cpu->A&0x8000)!=0; cpu->_flag_Z=cpu->A==0;
+      cpu->P=(cpu->P&~0x82)|(cpu->_flag_N?0x80:0)|(cpu->_flag_Z?2:0);
+    }
+    return;
+  }
   MmxCoopLiftCarry(g_ram);
   if ((pc&65535)==0xe12d) {
     /* The native bottom-camera clamp checks only $0BB0. Apply that same
@@ -1802,6 +1877,7 @@ static void menu_hook(CpuState *cpu,uint32_t pc) {
       unsigned seat=(state.players[state.anchor].pressed&8) ? state.anchor : state.anchor^1;
       if (state.players[seat].status!=MMX_COOP_ALIVE || !(state.players[seat].pressed&8)) return;
       state.menu_owner=(uint8_t)(seat+1);state.menu_last=(uint8_t)seat;
+      MmxPvpSetActiveSeat(seat);
       TRACE(MENU,pc,1,seat,cpu);
       MmxCoopSelect(g_ram,seat);
       MmxCoopApplyInput(g_ram);g_ram[0xbe3]|=0x10;
@@ -1815,6 +1891,7 @@ static void menu_hook(CpuState *cpu,uint32_t pc) {
 }
 static void death_hook(CpuState *cpu,uint32_t pc) {
   if(!enabled || !state.initialized || state.menu_owner) return;
+  if (MmxPvpBlocksCampaignDeath()) return;
   unsigned seat=state.current,other=seat^1;
   if((pc&65535)==0x9d9e) {
     TRACE(DEATH,pc,pc,seat,cpu);
@@ -1917,8 +1994,9 @@ static void controller_hook(CpuState *cpu, uint32_t pc) {
       interp_bridge_pre_opcode_redirect(0x82810a);
     return;
   }
-  if ((pc & 0xffff) == 0x8136) {
+    if ((pc & 0xffff) == 0x8136) {
     MmxCoopInitialize(g_ram);
+    if (state.initialized) pvp_prepare_seat(g_ram, state.current);
     diagnostic_event(g_ram,cpu,pc,"controller-enter");
     if (state.initialized && !state.controller_pass) {
       if(state.current==1) MmxCoopApplyInput(g_ram);

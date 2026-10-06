@@ -75,6 +75,20 @@ label = "Compact"
 value = "horizontal"
 label = "Horizontal"
 
+[[option]]
+feature = "coop"
+id = "rules"
+label = "Match rules"
+description = "Campaign keeps the co-op story. Arena is a fixed 1v1 box: best of three, shared health, and specials on cooldowns instead of energy tanks."
+type = "choice"
+default = "campaign"
+[[option.choice]]
+value = "campaign"
+label = "Campaign"
+[[option.choice]]
+value = "arena"
+label = "Arena"
+
 [[resource]]
 feature = "coop"
 id = "x3-rom"

@@ -1,3 +1,108 @@
+format_version = 1
+
 [[shared_resource]]
 id = "megaman-x.source.x3"
 path = "C:/Users/ahoin/Desktop/MegaManXSNESpvp/megas/Mega Man X3 (USA)/Mega Man X3 (USA).sfc"
+
+[[package]]
+id = "megaman-x.accessibility.hadouken"
+version = "1.0.0"
+
+[[package]]
+id = "megaman-x.character.zero"
+version = "0.0.1"
+
+[[package]]
+id = "megaman-x.coop"
+version = "0.0.1"
+
+[[package]]
+id = "megaman-x.developer.coop-diagnostics"
+version = "1.0.0"
+
+[[package]]
+id = "megaman-x.developer.tier2-diagnostics"
+version = "1.0.0"
+
+[[package]]
+id = "megaman-x.enhancement.msu1"
+version = "1.0.0"
+
+[[package]]
+id = "megaman-x.enhancement.password-save"
+version = "1.0.0"
+
+[[package]]
+id = "megaman-x.enhancement.widescreen"
+version = "1.0.0"
+
+[[package]]
+id = "megaman-x.weapons.x2"
+version = "0.1.0"
+
+[[package]]
+id = "megaman-x.weapons.x3"
+version = "0.1.0"
+
+[[package]]
+id = "snesrecomp.diagnostics.coverage"
+version = "1.0.0"
+
+[[feature]]
+package_id = "megaman-x.accessibility.hadouken"
+id = "hadouken"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.character.zero"
+id = "zero"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.coop"
+id = "coop"
+enabled = true
+
+[feature.values]
+player1 = "x"
+rules = "arena"
+
+[[feature]]
+package_id = "megaman-x.developer.coop-diagnostics"
+id = "coop-diagnostics"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.developer.tier2-diagnostics"
+id = "tier2-diagnostics"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.enhancement.msu1"
+id = "msu1"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.enhancement.password-save"
+id = "password_save"
+enabled = true
+
+[[feature]]
+package_id = "megaman-x.enhancement.widescreen"
+id = "widescreen"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.weapons.x2"
+id = "weapons"
+enabled = false
+
+[[feature]]
+package_id = "megaman-x.weapons.x3"
+id = "weapons"
+enabled = false
+
+[[feature]]
+package_id = "snesrecomp.diagnostics.coverage"
+id = "capture"
+enabled = false

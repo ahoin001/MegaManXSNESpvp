@@ -7,6 +7,7 @@
 #include "mmx_weapons.h"
 #include "mmx_weapon_combat.h"
 #include "mmx_coop_view.h"
+#include "mmx_pvp.h"
 #include <math.h>
 
 /* Mode-1 decode/composition follows SuperMetroidRecomp's sm_renderer.c.
@@ -1281,6 +1282,110 @@ static void coop_hud_row(const Ppu *ppu,const Raster *r,int y,MmxRenderView view
     }
   }
 }
+/* Versus overlay type: space, A-Z, 0-9, then - . , ' */
+static const uint8_t kPvpGlyph[][7] = {
+  {0,0,0,0,0,0,0},
+  {0x0E,0x11,0x11,0x1F,0x11,0x11,0x11},{0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E},
+  {0x0E,0x11,0x10,0x10,0x10,0x11,0x0E},{0x1E,0x11,0x11,0x11,0x11,0x11,0x1E},
+  {0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F},{0x1F,0x10,0x10,0x1E,0x10,0x10,0x10},
+  {0x0E,0x11,0x10,0x17,0x11,0x11,0x0E},{0x11,0x11,0x11,0x1F,0x11,0x11,0x11},
+  {0x0E,0x04,0x04,0x04,0x04,0x04,0x0E},{0x07,0x02,0x02,0x02,0x02,0x12,0x0C},
+  {0x11,0x12,0x14,0x18,0x14,0x12,0x11},{0x10,0x10,0x10,0x10,0x10,0x10,0x1F},
+  {0x11,0x1B,0x15,0x11,0x11,0x11,0x11},{0x11,0x19,0x15,0x13,0x11,0x11,0x11},
+  {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E},{0x1E,0x11,0x11,0x1E,0x10,0x10,0x10},
+  {0x0E,0x11,0x11,0x11,0x15,0x12,0x0D},{0x1E,0x11,0x11,0x1E,0x14,0x12,0x11},
+  {0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E},{0x1F,0x04,0x04,0x04,0x04,0x04,0x04},
+  {0x11,0x11,0x11,0x11,0x11,0x11,0x0E},{0x11,0x11,0x11,0x11,0x11,0x0A,0x04},
+  {0x11,0x11,0x11,0x15,0x15,0x1B,0x11},{0x11,0x11,0x0A,0x04,0x0A,0x11,0x11},
+  {0x11,0x11,0x0A,0x04,0x04,0x04,0x04},{0x1F,0x01,0x02,0x04,0x08,0x10,0x1F},
+  {0x0E,0x11,0x13,0x15,0x19,0x11,0x0E},{0x04,0x0C,0x04,0x04,0x04,0x04,0x0E},
+  {0x0E,0x11,0x01,0x06,0x08,0x10,0x1F},{0x0E,0x11,0x01,0x06,0x01,0x11,0x0E},
+  {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02},{0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E},
+  {0x06,0x08,0x10,0x1E,0x11,0x11,0x0E},{0x1F,0x01,0x02,0x04,0x08,0x08,0x08},
+  {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E},{0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C},
+  {0x00,0x00,0x00,0x1F,0x00,0x00,0x00},{0x00,0x00,0x00,0x00,0x00,0x0C,0x0C},
+  {0x00,0x00,0x00,0x00,0x0C,0x04,0x08},{0x0C,0x04,0x08,0x00,0x00,0x00,0x00}
+};
+static int pvp_glyph(char ch) {
+  if (ch >= 'A' && ch <= 'Z') return 1 + (ch - 'A');
+  if (ch >= 'a' && ch <= 'z') return 1 + (ch - 'a');
+  if (ch >= '0' && ch <= '9') return 27 + (ch - '0');
+  return ch == '-' ? 37 : ch == '.' ? 38 : ch == ',' ? 39 : ch == '\'' ? 40 : 0;
+}
+/* x is in the 256-wide field; the view's side margins are added here. */
+static void pvp_text(uint32_t *out, MmxRenderView view, int x, int y, int scale, uint32_t color,
+                     bool shadow, const char *text) {
+  int i, row, col, sx, sy;
+  if (scale < 1) scale = 1;
+  for (i = 0; text[i] && i < 48; ++i) {
+    int gi = pvp_glyph(text[i]), origin = view.extra + x + i * 6 * scale;
+    for (row = 0; row < 7; ++row) for (col = 0; col < 5; ++col) {
+      if ((kPvpGlyph[gi][row] & (0x10 >> col)) == 0) continue;
+      for (sy = 0; sy < scale; ++sy) for (sx = 0; sx < scale; ++sx) {
+        int px = origin + col * scale + sx, py = y + row * scale + sy;
+        if (px < 0 || py < 0 || px + 1 >= view.width || py + 1 >= 224) continue;
+        if (shadow) out[(py + 1) * view.width + px + 1] = 0x00000000u;
+        out[py * view.width + px] = color;
+      }
+    }
+  }
+}
+static uint32_t pvp_bgr555(uint16_t c) {
+  unsigned r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
+  return (uint32_t)(((r << 3) | (r >> 2)) << 16 | ((g << 3) | (g >> 2)) << 8 | ((b << 3) | (b >> 2)));
+}
+static void pvp_icon(uint32_t *out, MmxRenderView view, int x, int y, unsigned id) {
+  const MmxWeaponPose *icon = MmxWeaponsIcon(id >> 4, id & 15);
+  const uint16_t *colors = MmxWeaponsIconPalette(id >> 4, id & 15);
+  int row, col, ox = view.extra + x;
+  if (icon && colors && icon->pixels && icon->width <= 16 && icon->height <= 16) {
+    int dx = (16 - (int)icon->width) / 2, dy = (16 - (int)icon->height) / 2;
+    for (row = 0; row < (int)icon->height; ++row) for (col = 0; col < (int)icon->width; ++col) {
+      unsigned pixel = icon->pixels[row * icon->width + col];
+      int px = ox + dx + col, py = y + dy + row;
+      if (!pixel || px < 0 || py < 0 || px >= view.width || py >= 224) continue;
+      out[py * view.width + px] = pvp_bgr555(colors[pixel]);
+    }
+    return;
+  }
+  /* X1 weapons have no extracted icon: a chip in the cyan of the menus. */
+  for (row = 2; row < 14; ++row) for (col = 2; col < 14; ++col) {
+    int px = ox + col, py = y + row, edge = row == 2 || row == 13 || col == 2 || col == 13;
+    if (px < 0 || py < 0 || px >= view.width || py >= 224) continue;
+    out[py * view.width + px] = edge ? 0x0088E7FFu : 0x00203A58u;
+  }
+}
+static void pvp_setup_screen(uint32_t *out, MmxRenderView view) {
+  static const uint32_t tones[] = {0x00F2F6FFu, 0x007C8496u, 0x0088E7FFu, 0x007CFF8Au, 0x00FFC85Au, 0x002A4A6Au};
+  MmxPvpSetupItem items[96];
+  int cover = 0, count = MmxPvpSetupLayout(items, 96, &cover), i, sx, sy;
+  if (!count) return;
+  for (sy = 0; sy < 224; ++sy) {
+    uint32_t *row = out + sy * view.width;
+    if (cover) {
+      /* Night blue, a little lighter toward the top. */
+      uint32_t shade = (uint32_t)(24 - sy / 12);
+      uint32_t fill = (shade / 3) << 16 | (shade / 2 + 4) << 8 | (shade + 12);
+      for (sx = 0; sx < view.width; ++sx) row[sx] = fill;
+    } else {
+      for (sx = 0; sx < view.width; ++sx) row[sx] = (row[sx] >> 2) & 0x003f3f3fu;
+    }
+  }
+  for (i = 0; i < count; ++i) {
+    const MmxPvpSetupItem *it = &items[i];
+    if (it->tone == MMX_PVP_TONE_RULE) {
+      for (sx = 0; sx < it->width; ++sx) {
+        int px = view.extra + it->x + sx;
+        if (px >= 0 && px < view.width && it->y >= 0 && it->y < 224)
+          out[it->y * view.width + px] = tones[MMX_PVP_TONE_RULE];
+      }
+    } else if (it->icon) {
+      pvp_icon(out, view, it->x, it->y, it->icon);
+    } else {
+      pvp_text(out, view, it->x, it->y, it->scale, tones[it->tone < 6 ? it->tone : 0], it->scale > 1, it->text);
+    }
+  }
+}
 bool MmxRendererDraw(uint32_t *out, MmxRenderView view, bool hud) {
   if (!out || !frame.valid || view.width < 256 || view.width > MMX_RENDER_MAX_WIDTH ||
       view.extra != (view.width - 256) / 2 || (view.width & 1)) return false;
@@ -1645,6 +1750,44 @@ bool MmxRendererDraw(uint32_t *out, MmxRenderView view, bool hud) {
       }
       out[y * view.width + sx] = colour(&p, r->palette, brightness, screens[0], screens[1], color_window, object_colors[sx], bg_colors,
                                        dialogue_backdrop && (x < 0 || x >= 256));
+    }
+  }
+  {
+    MmxPvpState match = MmxPvpGetState();
+    if (match.enabled && match.arena_ready && match.layout == MMX_PVP_LAYOUT_PLATFORM) {
+      int half = (match.arena.right - match.arena.left) / 6;
+      int mid = (match.arena.left + match.arena.right) / 2;
+      int plat = match.arena.bottom - 52;
+      int x0, x1, y0, sx, sy;
+      if (half < 16) half = 16;
+      x0 = mid - half - match.arena.camera_x + view.extra;
+      x1 = mid + half - match.arena.camera_x + view.extra;
+      y0 = plat - match.arena.camera_y;
+      if (x0 < 0) x0 = 0;
+      if (x1 > view.width) x1 = view.width;
+      for (sy = 0; sy < 5; ++sy) for (sx = x0; sx < x1; ++sx) {
+        int py = y0 + sy;
+        if (py < 0 || py >= 224) continue;
+        out[py * view.width + sx] = sy == 0 || sx == x0 || sx + 1 == x1 ? 0x0088E7FFu : 0x00B7C3D0u;
+      }
+    }
+    pvp_setup_screen(out, view);
+    char text[64];
+    if (MmxPvpScoreLine(text, sizeof text)) {
+      int len = (int)strlen(text);
+      pvp_text(out, view, (256 - len * 6) / 2, 4, 1, 0x00F2F6FFu, true, text);
+    }
+    if (MmxPvpCallout(text, sizeof text)) {
+      int len = (int)strlen(text), x = (256 - len * 12) / 2, bar_y = 24, sy, sx, x0, x1;
+      if (len > 20) len = 20, x = 8;
+      x0 = view.extra + x - 8;
+      x1 = view.extra + x + len * 12 + 8;
+      if (x0 < 0) x0 = 0;
+      if (x1 > view.width) x1 = view.width;
+      for (sy = bar_y - 6; sy < bar_y + 20 && sy < 224; ++sy)
+        for (sx = x0; sx < x1; ++sx)
+          out[sy * view.width + sx] = 0x00081018u;
+      pvp_text(out, view, x, bar_y, 2, strcmp(text, "GO") ? 0x00F2F6FFu : 0x0088E7FFu, true, text);
     }
   }
   return true;

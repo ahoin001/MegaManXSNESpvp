@@ -4,6 +4,7 @@
 #include "mmx_coop.h"
 #include "mmx_pvp.h"
 #include "mmx_versus.h"
+#include "mmx_arena.h"
 #include "mmx_weapons.h"
 #include <stdio.h>
 #include <string.h>
@@ -30,6 +31,8 @@ typedef struct VersusPick {
   int valid;
 } VersusPick;
 static VersusPick s_picks[8];
+static int s_room;
+static int s_layout;
 
 int MmxNetplayActive(void) { return s_active; }
 
@@ -265,27 +268,44 @@ static const VersusPick *find_pick(const char *name) {
     if (s_picks[i].valid && !strcmp(s_picks[i].name, name)) return &s_picks[i];
   return NULL;
 }
-static int chat_is_pick(void *ctx, int index) {
+static int chat_is_hidden(void *ctx, int index) {
   RecompLauncherCNetplayChatMessage msg;
-  int w0, w1, w2;
+  int w0, w1, w2, room, layout;
   if (!s_net->chat_get || !s_net->chat_get(ctx, index, &msg)) return 0;
-  if (!MmxPvpParsePick(msg.text, &w0, &w1, &w2)) return 0;
-  remember_pick(msg.from, w0, w1, w2);
-  return 1;
+  if (MmxPvpParsePick(msg.text, &w0, &w1, &w2)) {
+    remember_pick(msg.from, w0, w1, w2);
+    return 1;
+  }
+  if (MmxPvpParseMap(msg.text, &room, &layout)) {
+    s_room = room;
+    s_layout = layout;
+    return 1;
+  }
+  return 0;
 }
 static int chat_count(void *ctx) {
   int n = s_net->chat_count ? s_net->chat_count(ctx) : 0, i, hidden = 0;
-  for (i = 0; i < n; ++i) if (chat_is_pick(ctx, i)) ++hidden;
+  for (i = 0; i < n; ++i) if (chat_is_hidden(ctx, i)) ++hidden;
   return n - hidden;
 }
 static int chat_get(void *ctx, int index, RecompLauncherCNetplayChatMessage *out) {
   int n = s_net->chat_count ? s_net->chat_count(ctx) : 0, i, seen = 0;
   if (!out) return 0;
   for (i = 0; i < n; ++i) {
-    if (chat_is_pick(ctx, i)) continue;
+    if (chat_is_hidden(ctx, i)) continue;
     if (seen++ == index) return s_net->chat_get(ctx, i, out);
   }
   return 0;
+}
+static void publish_map(void *ctx) {
+  char line[48];
+  snprintf(line, sizeof(line), "%s%d %d", MMX_PVP_MAP_PREFIX, s_room, s_layout);
+  if (s_net && s_net->chat_send) s_net->chat_send(ctx, line);
+}
+static int stage_host(void *ctx) {
+  if (!s_net || !s_net->is_host || !s_net->member_count) return 1;
+  if (s_net->member_count(ctx) <= 0) return 1;
+  return s_net->is_host(ctx);
 }
 static int member_get(void *ctx, int index, RecompLauncherCNetplayMember *out) {
   const VersusPick *pick;
@@ -330,6 +350,7 @@ static int versus_local(void *ctx) {
   if (!s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena"))
     return fail("Could not select Arena rules for couch versus.");
   s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
+  MmxPvpArmArena((unsigned)s_room, (unsigned)s_layout);
   return 1;
 }
 static int versus_begin(void *ctx) {
@@ -407,6 +428,49 @@ static int versus_behavior_set(void *ctx, const char *value) {
   if (ok && s_net->push_match_caps) s_net->push_match_caps(ctx);
   return ok;
 }
+static int versus_stage_count(void *ctx) {
+  (void)ctx;
+  return MmxArenaRoomCount();
+}
+static int versus_stage_get(void *ctx, int index, RecompLauncherCVersusStage *out) {
+  MmxArenaRoom room;
+  (void)ctx;
+  if (!out || !MmxArenaRoomGet(index, &room)) return 0;
+  memset(out, 0, sizeof(*out));
+  out->stage_id = room.stage_id;
+  snprintf(out->name, sizeof(out->name), "%s", room.name);
+  snprintf(out->blurb, sizeof(out->blurb), "%s", room.blurb);
+  return 1;
+}
+static int versus_stage_current(void *ctx) {
+  int room = 0, layout = 0, n, i;
+  if (!s_net || !s_net->chat_count) return s_room;
+  n = s_net->chat_count(ctx);
+  for (i = 0; i < n; ++i) {
+    RecompLauncherCNetplayChatMessage msg;
+    if (s_net->chat_get && s_net->chat_get(ctx, i, &msg) && MmxPvpParseMap(msg.text, &room, &layout)) {
+      s_room = room;
+      s_layout = layout;
+    }
+  }
+  return s_room;
+}
+static int versus_stage_set(void *ctx, int index) {
+  if (index < 0 || index >= MmxArenaRoomCount() || !stage_host(ctx)) return 0;
+  s_room = index;
+  publish_map(ctx);
+  return 1;
+}
+static int versus_layout_get(void *ctx) {
+  (void)versus_stage_current(ctx);
+  return s_layout;
+}
+static int versus_layout_set(void *ctx, int layout) {
+  if ((layout != 0 && layout != 1) || !stage_host(ctx)) return 0;
+  s_layout = layout;
+  publish_map(ctx);
+  return 1;
+}
 static int versus_picks_ready(void *ctx) {
   int got[2] = {0, 0}, n, i;
   if (!versus_active(ctx)) return 1;
@@ -426,27 +490,15 @@ static int commit_netplay(void *ctx, const char *rom) {
   if (versus_active(ctx)) {
     uint8_t character[2] = {0, 1};
     uint8_t loadout[2][MMX_PVP_LOADOUT_SLOTS];
-    int got[2] = {0, 0}, n, i;
     memset(loadout, 0, sizeof(loadout));
     if (s_net->is_host && s_net->is_host(ctx) && s_mods) {
       s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
       s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
       s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "cameras", "unified");
     }
-    n = s_net->member_count ? s_net->member_count(ctx) : 0;
-    for (i = 0; i < n; ++i) {
-      RecompLauncherCNetplayMember member;
-      if (!member_get(ctx, i, &member) || member.slot < 0 || member.slot > 1) continue;
-      if (!member.display_name[0] || !member.versus_pick_valid)
-        return fail("Both players need three weapons before the match can start.");
-      loadout[member.slot][0] = (uint8_t)member.versus_weapon0;
-      loadout[member.slot][1] = (uint8_t)member.versus_weapon1;
-      loadout[member.slot][2] = (uint8_t)member.versus_weapon2;
-      got[member.slot] = 1;
-    }
-    if (!got[0] || !got[1])
-      return fail("Both players need three weapons before the match can start.");
+    /* Weapons, armor, Zero, and the stage are chosen on the game screen. */
     MmxPvpArmLaunch(character, loadout);
+    MmxPvpArmArena(0, 0);
     armed = 1;
   }
   if (!s_mods->commit(ctx, rom)) {
@@ -513,6 +565,12 @@ void MmxNetplayConfigureLauncher(RecompLauncherCGameInfo *info) {
   s_callbacks.versus_behavior_get = versus_behavior_get;
   s_callbacks.versus_behavior_set = versus_behavior_set;
   s_callbacks.versus_picks_ready = versus_picks_ready;
+  s_callbacks.versus_stage_count = versus_stage_count;
+  s_callbacks.versus_stage_get = versus_stage_get;
+  s_callbacks.versus_stage_current = versus_stage_current;
+  s_callbacks.versus_stage_set = versus_stage_set;
+  s_callbacks.versus_layout_get = versus_layout_get;
+  s_callbacks.versus_layout_set = versus_layout_set;
   s_callbacks.last_error = net_error;
   s_callbacks.clear_last_error = clear_error;
   s_callbacks.allow_spectators_get = NULL;

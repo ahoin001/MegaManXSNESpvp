@@ -19,6 +19,7 @@
 #include "cpu_trace.h"
 #include "snes/interp_bridge.h"   /* faithful LLE of the $8099 task scheduler */
 #include <setjmp.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -538,8 +539,14 @@ void MmxStateLoadExtra(struct SaveLoadInfo *sli, uint32_t version) {
     } else g_load_chunk_ok=0;
   }
   if(g_load_complete && g_load_chunk.version>=18) {
-    if(RtlStateBytesRemaining(sli)>=sizeof(g_load_pvp)) {
-      sli->func(sli,&g_load_pvp,sizeof(g_load_pvp));
+    size_t pvp_have = RtlStateBytesRemaining(sli);
+    size_t pvp_need = sizeof(g_load_pvp);
+    size_t pvp_old = offsetof(MmxPvpState, owner);
+    if(pvp_have >= pvp_need) {
+      sli->func(sli,&g_load_pvp,pvp_need);
+      if(!MmxPvpValidState(&g_load_pvp)) g_load_chunk_ok=0;
+    } else if(pvp_have >= pvp_old) {
+      sli->func(sli,&g_load_pvp,pvp_have);
       if(!MmxPvpValidState(&g_load_pvp)) g_load_chunk_ok=0;
     } else g_load_chunk_ok=0;
   }
@@ -981,9 +988,12 @@ void RunOneFrameOfGame(void) {
       s_prev = onscreen;
     }
 #endif
-    if (MmxPvpBootWantsStart((unsigned)snes_frame_counter,
-            g_ram[0xd1] == 2 && g_ram[0xd2] == 4 && g_ram[0xba9] == 2))
-      RtlSetPadState(0, (uint16)(RtlGetPadState(0) | (1u << 3)));
+    {
+      int in_stage = g_ram[0xd1] == 2 && g_ram[0xd2] == 4 && g_ram[0xba9] == 2;
+      MmxPvpSetupPoll(RtlGetPadState(0), RtlGetPadState(1), in_stage);
+      if (MmxPvpBootWantsStart((unsigned)snes_frame_counter, in_stage))
+        RtlSetPadState(0, (uint16)(RtlGetPadState(0) | (1u << 3)));
+    }
     g_snes->inNmi = true;
     /* Option-1 cpu->S ABI: model the hardware NMI-entry push so the
      * handler's RTI has a frame to pop (paired with cpu_state.h's RTI

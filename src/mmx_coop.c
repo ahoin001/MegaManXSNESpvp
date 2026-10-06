@@ -1,5 +1,7 @@
 #include "mmx_coop.h"
 #include "mmx_pvp.h"
+#include "mmx_zero.h"
+#include "mmx_arena.h"
 #include "mmx_coop_view.h"
 #include "mmx_renderer.h"
 #include "mmx_coop_trace.h"
@@ -492,7 +494,14 @@ static void pvp_frame(uint8_t *r) {
   }
   MmxPvpSimulate(seats, (int16_t)word(r + 0x1e56), (int16_t)word(r + 0x1e58),
       (int16_t)word(r + 0x1e5a), (int16_t)word(r + 0x1e5c), r[0x1f7a], r[0x1f9a] & 127);
+  MmxPvpRetireArenaActors(r);
   snap = MmxPvpGetState();
+  /* $1F80 is the stock the new-game initializer sets to 2. A pit on the way
+   * in restarts at the checkpoint instead of ending on the title. */
+  if (r[0x1f80] < 2) r[0x1f80] = 2;
+  if (snap.armor) r[0x1f99] = (uint8_t)(r[0x1f99] | 0x0f);
+  else r[0x1f99] = (uint8_t)(r[0x1f99] & (uint8_t)~0x0f);
+  MmxZeroSetModern(snap.zero_modern != 0);
   if (!snap.arena_ready) return;
   putword(r + 0x1e4d, (unsigned)(uint16_t)snap.arena.camera_x);
   putword(r + 0x1e50, (unsigned)(uint16_t)snap.arena.camera_y);
@@ -913,6 +922,11 @@ static void door_hook(CpuState *cpu,uint32_t pc) {
   if(!state.door_pass || cpu->S!=state.door_s || cpu->D!=state.door_d) return;
   TRACE(DOOR,pc,state.door_pass,0,cpu);
   if(at==0xe725 || at==0xecc7) {
+    if (MmxPvpEnabled()) {
+      int cam_x = (int16_t)(g_ram[0x1e4d] | (g_ram[0x1e4e] << 8));
+      int cam_y = (int16_t)(g_ram[0x1e50] | (g_ram[0x1e51] << 8));
+      MmxPvpGateOpened(cam_x, cam_y);
+    }
     state.anchor=state.current;state.door_pass=0;begin_scene(g_ram);return;
   }
   if(state.door_pass==1) {

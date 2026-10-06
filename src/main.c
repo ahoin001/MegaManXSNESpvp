@@ -9,6 +9,9 @@
 #include "snes/ws_shadow.h"
 #include "widescreen.h"
 #include "mmx_rtl.h"
+#include "mmx_pvp.h"
+#include "mmx_arena.h"
+#include "mmx_versus.h"
 #include "mmx_display.h"
 #include "mmx_renderer.h"
 #include "mmx_zero.h"
@@ -42,13 +45,15 @@ static bool s_render_valid;
 static void MmxRomLoaded(const uint8_t *rom, size_t size) {
   if ((size & 0x7fff) == 512) { rom += 512; size -= 512; }
   MmxRendererSetRom(rom, size);
+  MmxArenaSetRom(rom, size);
+  MmxPvpSetPageCheck(MmxVersusEnsurePage);
 }
 
 static void MmxPrepareFrame(int dw, int dh, int *w, int *h) {
   /* A room has one logical field. Window size and each peer's offline pixel
    * preference cannot widen it. The offline setting is never overwritten. */
   SnesDisplayAspect aspect = SnesDisplayAspect_Clamp(MmxNetplayActive() ? 0 : g_config.display_aspect);
-  g_mmx_custom_renderer = !MMX_VARIANT_JP && (g_config.widescreen || MmxZeroEnabled() || MmxWeaponsEnabled() || MmxKncBugfixActive(0) || MmxKncBugfixActive(1));
+  g_mmx_custom_renderer = !MMX_VARIANT_JP && (g_config.widescreen || MmxZeroEnabled() || MmxWeaponsEnabled() || MmxKncBugfixActive(0) || MmxKncBugfixActive(1) || MmxPvpEnabled());
   g_mmx_custom_view = MmxRendererViewport(g_mmx_custom_aspect, dw, dh,
       aspect);
   if (!g_config.widescreen) {

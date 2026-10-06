@@ -22,12 +22,14 @@ OPTIONAL = {0x02d7d7}
 # $81:EC98 state crashes when interpreted during the Storm Eagle lift ride
 # (dispatch to $50:D2ED), so the doors enter the interpreter only when
 # door_hook can open its pass.
+PATCHES = {'stage', 'armor', 'checkpoint'}
 POLICIES = {0x01e70d: 'MmxCoopDoorRouteE70D', 0x01ec98: 'MmxCoopDoorRouteEC98'}
 
 
 def apply(text):
     output, found = [], set()
     native_pc = 0
+    fn_pc = 0
     for line in text.splitlines(keepends=True):
         if MARKER in line:
             continue
@@ -35,7 +37,18 @@ def apply(text):
         entry = re.match(r'RecompReturn bank_([0-9A-Fa-f]{2})_([0-9A-Fa-f]{4})_M[01]X[01]\(CpuState \*cpu\) \{', line)
         pc = int(entry[1] + entry[2],16) if entry else 0
         if entry:
-            native_pc = pc if (pc & 0x7fffff) in TARGETS | OPTIONAL else 0
+            fn_pc = pc & 0x7fffff
+            native_pc = pc if fn_pc in TARGETS | OPTIONAL else 0
+        if fn_pc == 0x94E7 and 'cpu_write8(cpu, cpu->DB, (uint16)(0x1f7a), _v1);' in line:
+            output.append('  /*MMX-COOP*/ { extern void MmxPvpPatchNewGameStage(void); MmxPvpPatchNewGameStage(); }\n')
+            found.add('stage')
+        if fn_pc == 0x94E7 and 'cpu_write8(cpu, cpu->DB, (uint16)(0x1f99), _v11);' in line:
+            output.append('  /*MMX-COOP*/ { extern void MmxPvpPatchNewGameArmor(void); MmxPvpPatchNewGameArmor(); }\n')
+            found.add('armor')
+        # $00:991B stage entry: STZ $1F81, then 3 when $1F7F is set.
+        if fn_pc == 0x991B and re.search(r'cpu_write8\(cpu, cpu->DB, \(uint16\)\(0x1f81\), _v\d+\);', line):
+            output.append('  /*MMX-COOP*/ { extern void MmxPvpPatchCheckpoint(void); MmxPvpPatchCheckpoint(); }\n')
+            found.add('checkpoint')
         if native_pc and 'g_cpu_entry_s[g_recomp_stack_top - 1] = _entry_s;' in line:
             # Run the generated prologue first: a JMP/JML caller may have
             # supplied an inherited return context. Leaving it pending lets
@@ -66,6 +79,8 @@ def main():
         found |= count
         if updated != text:
             path.write_text(updated, encoding='utf-8', newline='\n')
+    if PATCHES - found:
+        raise SystemExit(f'Missing versus patch sites: {PATCHES - found}')
     if TARGETS - found:
         raise SystemExit(f'Missing co-op native entries: {TARGETS - found}')
     for pc in sorted(OPTIONAL - found):

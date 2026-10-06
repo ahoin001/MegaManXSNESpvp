@@ -58,12 +58,16 @@ package_id = "megaman-x.character.zero"
 id = "zero"
 enabled = false
 
+[feature.values]
+behavior = "modern"
+
 [[feature]]
 package_id = "megaman-x.coop"
 id = "coop"
 enabled = true
 
 [feature.values]
+behavior = "modern"
 player1 = "x"
 rules = "arena"
 

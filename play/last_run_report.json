@@ -1,0 +1,112 @@
+{
+  "reason": "atexit",
+  "timestamp": "2026-10-06T19:39:03Z",
+  "build": {"game": "Mega Man X", "version": "2.1.8-alpha", "pe_timestamp": 1791311366},
+  "os": {"platform": "windows", "version": "10.0.26200", "arch": 9, "cpus": 12, "cpu_brand": "12th Gen Intel(R) Core(TM) i5-12400F", "ram_total_mb": 16243, "ram_avail_mb": 3292},
+  "sdl": {"compiled": "3.4.10", "linked": "3.4.10", "video_driver": "(none)", "audio_driver": "(none)"},
+  "modules": [
+    {"base": 140703052267520, "size": 54104064, "path": "C:\\Users\\ahoin\\Desktop\\MegaManXSNESpvp\\play\\MegaManXSNESRecomp.exe"},
+    {"base": 140723235979264, "size": 2519040, "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll"},
+    {"base": 140723216973824, "size": 831488, "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL"},
+    {"base": 140723190169600, "size": 4198400, "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll"},
+    {"base": 140723212713984, "size": 528384, "path": "C:\\WINDOWS\\System32\\WS2_32.dll"},
+    {"base": 140723194429440, "size": 1359872, "path": "C:\\WINDOWS\\System32\\ucrtbase.dll"},
+    {"base": 140723139379200, "size": 2408448, "path": "C:\\WINDOWS\\SYSTEM32\\dbghelp.dll"},
+    {"base": 140720208740352, "size": 1097728, "path": "C:\\WINDOWS\\SYSTEM32\\OPENGL32.dll"},
+    {"base": 140723211534336, "size": 1146880, "path": "C:\\WINDOWS\\System32\\RPCRT4.dll"},
+    {"base": 140723207471104, "size": 3710976, "path": "C:\\WINDOWS\\System32\\combase.dll"},
+    {"base": 140723222282240, "size": 692224, "path": "C:\\WINDOWS\\System32\\msvcrt.dll"},
+    {"base": 140723219988480, "size": 1679360, "path": "C:\\WINDOWS\\System32\\ole32.dll"},
+    {"base": 140723216056320, "size": 888832, "path": "C:\\WINDOWS\\System32\\OLEAUT32.dll"},
+    {"base": 140723196854272, "size": 667648, "path": "C:\\WINDOWS\\System32\\msvcp_win.dll"},
+    {"base": 140723213959168, "size": 765952, "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll"},
+    {"base": 140723214745600, "size": 688128, "path": "C:\\WINDOWS\\System32\\sechost.dll"},
+    {"base": 140723226345472, "size": 176128, "path": "C:\\WINDOWS\\System32\\GDI32.dll"},
+    {"base": 140723133874176, "size": 2531328, "path": "C:\\WINDOWS\\SYSTEM32\\DWrite.dll"},
+    {"base": 140723232374784, "size": 1929216, "path": "C:\\WINDOWS\\System32\\USER32.dll"},
+    {"base": 140723127189504, "size": 6529024, "path": "C:\\WINDOWS\\SYSTEM32\\d2d1.dll"},
+    {"base": 140723195871232, "size": 159744, "path": "C:\\WINDOWS\\System32\\win32u.dll"},
+    {"base": 140723198164992, "size": 1212416, "path": "C:\\WINDOWS\\System32\\gdi32full.dll"},
+    {"base": 140723226083328, "size": 200704, "path": "C:\\WINDOWS\\System32\\IMM32.dll"},
+    {"base": 140723226542080, "size": 4747264, "path": "C:\\WINDOWS\\System32\\SETUPAPI.dll"},
+    {"base": 140723199410176, "size": 7979008, "path": "C:\\WINDOWS\\System32\\SHELL32.dll"},
+    {"base": 140720859840512, "size": 233472, "path": "C:\\WINDOWS\\SYSTEM32\\GLU32.dll"},
+    {"base": 140722939756544, "size": 225280, "path": "C:\\WINDOWS\\SYSTEM32\\WINMM.dll"},
+    {"base": 140723231326208, "size": 1003520, "path": "C:\\WINDOWS\\System32\\COMDLG32.dll"},
+    {"base": 140723051626496, "size": 45056, "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll"},
+    {"base": 140723160547328, "size": 208896, "path": "C:\\WINDOWS\\SYSTEM32\\IPHLPAPI.DLL"},
+    {"base": 140723225034752, "size": 1019904, "path": "C:\\WINDOWS\\System32\\shcore.dll"},
+    {"base": 140723215597568, "size": 417792, "path": "C:\\WINDOWS\\System32\\SHLWAPI.dll"},
+    {"base": 140723125551104, "size": 278528, "path": "C:\\WINDOWS\\SYSTEM32\\dxcore.dll"},
+    {"base": 140723186565120, "size": 172032, "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll"},
+    {"base": 140723061850112, "size": 741376, "path": "C:\\WINDOWS\\WinSxS\\amd64_microsoft.windows.common-controls_6595b64144ccf1df_5.82.26100.8328_none_87eede957a2ccddd\\COMCTL32.dll"},
+    {"base": 140722755469312, "size": 643072, "path": "C:\\WINDOWS\\SYSTEM32\\MSVCP140.dll"},
+    {"base": 140722762219520, "size": 49152, "path": "C:\\WINDOWS\\SYSTEM32\\VCRUNTIME140_1.dll"},
+    {"base": 140722763137024, "size": 180224, "path": "C:\\WINDOWS\\SYSTEM32\\VCRUNTIME140.dll"},
+    {"base": 140723183616000, "size": 335872, "path": "C:\\WINDOWS\\SYSTEM32\\cfgmgr32.DLL"},
+    {"base": 140723189383168, "size": 704512, "path": "C:\\WINDOWS\\System32\\bcryptPrimitives.dll"}
+  ],
+  "breadcrumbs": {"write_idx": 4, "events": [
+    {"t_ms": 0, "msg": "host_report: Mega Man X 2.1.8-alpha"},
+    {"t_ms": 0, "msg": "config dir anchored: C:\\Users\\ahoin\\Desktop\\MegaManXSNESpvp\\play (exe-dir anchor: ok)"},
+    {"t_ms": 0, "msg": "config parsed: output=0 new_renderer=1 scale=3 fullscreen=0 audio=1 freq=32040 samples=512"},
+    {"t_ms": 9, "msg": "rom resolved: C:\\Users\\ahoin\\Desktop\\MegaManXSNESpvp\\megas\\Mega Man X (USA) (Rev 1)\\Mega Man X (USA) (Rev 1).sfc"}
+  ]},
+  "seh": null,
+  "status": {
+    "frame": 0,
+    "main_cycles": 0,
+    "trace_write_idx": 0,
+    "dbpb_write_idx": 0
+  },
+  "cpu": {
+    "A": 0, "X": 0, "Y": 0, "S": 0, "D": 0,
+    "DB": 0, "PB": 0, "P": 0,
+    "m_flag": 0, "x_flag": 0, "emulation": 0
+  },
+  "wram": {
+    "GameMode_0100": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "DP_0080": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "DP_low_0000": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "sprite_type_009E": [0,0,0,0,0,0,0,0,0,0,0,0],
+    "sprite_status_14C8": [0,0,0,0,0,0,0,0,0,0,0,0],
+    "player_state_1925": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "init_sig_7F8000": [0,0,0,0]
+  },
+  "recomp_stack": {
+    "top": 0,
+    "last_func": "(none)",
+    "frames": []
+  },
+  "stack_balance": [],
+  "stack_balance_disabled": true,
+  "unresolved_abandons": {
+    "total_hits": 0,
+    "distinct_sites": 0,
+    "overflowed_hits": 0,
+    "sites": [
+    ]
+  },
+  "dispatch_log": {"disabled":true,"total":0,"shown":0,"events":[]},
+  "ppu_frames": {"disabled":true,"snaps":[]},
+  "wram_probes": {"disabled":true},
+  "dma_events": {"disabled":true,"events":[]},
+  "tier2_coverage": {
+    "total_tier_hits": 0,
+    "distinct_sites": 0,
+    "overflowed_tuples": 0,
+    "journal_write_failures": 0,
+    "discoveries": [
+    ]
+  },
+  "trace_recent": {"disabled": true},
+  "dbpb_recent": {"disabled": true},
+  "scoped_tripwire": {"disabled": true},
+  "px_tripwire": {"disabled": true},
+  "threads": [
+    {"tid":51500,"name":"","rip":140703053138337,"rsp":441208270976,"rbp":441208271232,"frames":[{"i":0,"pc":140703053138337,"name":"?","file":"?","line":0},{"i":1,"pc":140703053142678,"name":"?","file":"?","line":0},{"i":2,"pc":140723194731653,"name":"bsearch_s","file":"?","line":0},{"i":3,"pc":140723194730663,"name":"execute_onexit_table","file":"?","line":0},{"i":4,"pc":140723194730589,"name":"execute_onexit_table","file":"?","line":0},{"i":5,"pc":140723194728281,"name":"wcsnicmp_l","file":"?","line":0},{"i":6,"pc":140723194728171,"name":"wcsnicmp_l","file":"?","line":0},{"i":7,"pc":140723195086778,"name":"logbf","file":"?","line":0},{"i":8,"pc":140703071883628,"name":"?","file":"?","line":0},{"i":9,"pc":140723217157623,"name":"BaseThreadInitThunk","file":"?","line":0},{"i":10,"pc":140723236499020,"name":"RtlUserThreadStart","file":"?","line":0}]},
+    {"tid":18412,"name":"","rip":140723237443732,"rsp":441209321480,"rbp":0,"frames":[{"i":0,"pc":140723237443732,"name":"NtWaitForWorkViaWorkerFactory","file":"?","line":0},{"i":1,"pc":140723236130062,"name":"TpCallbackMayRunLong","file":"?","line":0},{"i":2,"pc":140723217157623,"name":"BaseThreadInitThunk","file":"?","line":0},{"i":3,"pc":140723236499020,"name":"RtlUserThreadStart","file":"?","line":0}]},
+    {"tid":42808,"name":"","rip":140723237443732,"rsp":441210370088,"rbp":0,"frames":[{"i":0,"pc":140723237443732,"name":"NtWaitForWorkViaWorkerFactory","file":"?","line":0},{"i":1,"pc":140723236130062,"name":"TpCallbackMayRunLong","file":"?","line":0},{"i":2,"pc":140723217157623,"name":"BaseThreadInitThunk","file":"?","line":0},{"i":3,"pc":140723236499020,"name":"RtlUserThreadStart","file":"?","line":0}]},
+    {"tid":2948,"name":"","rip":140723237443732,"rsp":441211418872,"rbp":0,"frames":[{"i":0,"pc":140723237443732,"name":"NtWaitForWorkViaWorkerFactory","file":"?","line":0},{"i":1,"pc":140723236130062,"name":"TpCallbackMayRunLong","file":"?","line":0},{"i":2,"pc":140723217157623,"name":"BaseThreadInitThunk","file":"?","line":0},{"i":3,"pc":140723236499020,"name":"RtlUserThreadStart","file":"?","line":0}]}
+  ]
+}

@@ -79,7 +79,7 @@ label = "Horizontal"
 feature = "coop"
 id = "rules"
 label = "Match rules"
-description = "Campaign keeps the co-op story. Arena is a fixed 1v1 box: best of three, shared health, and specials on cooldowns instead of energy tanks."
+description = "Campaign keeps the co-op story. Arena is a 1v1 on one screen, at home on two controllers or in a Versus room. Best of three, shared health, and specials on cooldowns."
 type = "choice"
 default = "campaign"
 [[option.choice]]

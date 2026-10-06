@@ -98,6 +98,9 @@ unsigned MmxPvpActiveSeat(void);
 bool MmxPvpInputLocked(void);
 bool MmxPvpBlocksCampaignDeath(void);
 bool MmxPvpArenaReady(void);
+/* 1 when addr is one enemy ($E68) or enemy-shot ($1428) slot, which is then cleared.
+ * Player shots at $1228 are left alone. */
+int MmxPvpRetireStageSlot(uint8_t *ram, unsigned addr);
 bool MmxPvpFollowTarget(int *x, int *y);
 void MmxPvpClampBody(int *x, int *y);
 

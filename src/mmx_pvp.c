@@ -147,6 +147,17 @@ bool MmxPvpInputLocked(void) { return g_pvp.enabled && g_pvp.phase != MMX_PVP_FI
 bool MmxPvpBlocksCampaignDeath(void) { return MmxPvpInputLocked(); }
 bool MmxPvpArenaReady(void) { return g_pvp.enabled && g_pvp.arena_ready; }
 
+int MmxPvpRetireStageSlot(uint8_t *ram, unsigned addr) {
+  unsigned base;
+  if (!ram) return 0;
+  addr &= 0xffffu;
+  if (addr >= 0xe68u && addr < 0x1228u && (addr - 0xe68u) % 64u == 0) base = addr;
+  else if (addr >= 0x1428u && addr < 0x1628u && (addr - 0x1428u) % 64u == 0) base = addr;
+  else return 0;
+  memset(ram + base, 0, 64);
+  return 1;
+}
+
 bool MmxPvpFollowTarget(int *x, int *y) {
   if (!MmxPvpArenaReady() || !x || !y) return false;
   *x = g_pvp.arena.camera_x + 128;

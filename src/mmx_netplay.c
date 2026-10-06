@@ -103,6 +103,11 @@ static void mode_changed(int enabled) {
     s_mods->feature_set_option(s_mods->ctx, kWide, "widescreen", "aspect", "16:9");
 }
 
+static int rules_arena(void) {
+  char rules[32] = {0};
+  snes_mod_runtime_feature_option_value_c(kCoop, "coop", "rules", rules, sizeof(rules));
+  return strcmp(rules, "arena") == 0;
+}
 static int validate_plan(void) {
   if (!s_active || !snes_mod_runtime_feature_enabled_c(kCoop, "coop"))
     return fail("Netplay requires X + Zero co-op. Reopen Netplay to prepare the room.");
@@ -112,6 +117,8 @@ static int validate_plan(void) {
   snes_mod_runtime_feature_option_value_c(kCoop, "coop", "cameras", cameras, sizeof(cameras));
   if (strcmp(cameras, "independent") && strcmp(cameras, "unified"))
     return fail("Choose Independent or Unified netplay cameras. Restore the bundled co-op mod if this option is missing.");
+  if (rules_arena() && strcmp(cameras, "unified"))
+    return fail("Versus uses one shared screen. Switch the room to Campaign for separate cameras.");
   if (snes_mod_runtime_feature_enabled_c(kWide, "widescreen")) {
     char aspect[32] = {0};
     snes_mod_runtime_feature_option_value_c(kWide, "widescreen", "aspect", aspect, sizeof(aspect));
@@ -142,8 +149,16 @@ static int feature_get(void *ctx, int index, RecompLauncherCModFeature *out) {
       if (!strcmp(option.id, "cameras")) --out->option_count;
   }
   if (s_active && !strcmp(out->package_id, kZero)) out->hidden = 1;
-  if (s_active && !strcmp(out->package_id, kCoop) && !out->has_error)
-    snprintf(out->status, sizeof(out->status), "Required for netplay");
+  if (s_active && !strcmp(out->package_id, kCoop) && !out->has_error) {
+    if (s_versus || rules_arena()) {
+      snprintf(out->name, sizeof(out->name), "Versus");
+      snprintf(out->description, sizeof(out->description),
+          "Best of three on one screen. Both players share the same health, and specials recharge instead of using energy tanks. The fight starts once both players are in the stage.");
+      snprintf(out->status, sizeof(out->status), "Versus lobby");
+    } else {
+      snprintf(out->status, sizeof(out->status), "Required for netplay");
+    }
+  }
   return 1;
 }
 static int option_get(void *ctx, const char *pkg, const char *fid, int index,
@@ -162,10 +177,28 @@ static int option_get(void *ctx, const char *pkg, const char *fid, int index,
     snprintf(out->description, sizeof(out->description),
         "The host chooses the same fixed view for both players. Resizing scales the picture. Netplay uses original CRT pixel proportions.");
   }
+  if (s_active && !strcmp(pkg, kCoop) && !strcmp(out->id, "rules")) {
+    snprintf(out->label, sizeof(out->label), "Room");
+    snprintf(out->description, sizeof(out->description),
+        "Versus is a best-of-three fight on one screen. Campaign keeps the co-op story and can use separate cameras.");
+  }
+  if (s_active && !strcmp(pkg, kCoop) && !strcmp(out->id, "cameras") && (s_versus || rules_arena())) {
+    out->disabled = 1;
+    snprintf(out->description, sizeof(out->description),
+        "Versus keeps both players on one screen. Switch the room to Campaign to choose independent cameras.");
+  }
   return 1;
 }
 static int choice_get(void *ctx, const char *pkg, const char *fid, const char *option,
                       int index, RecompLauncherCModChoice *out) {
+  if (s_active && !strcmp(pkg, kCoop) && !strcmp(option, "rules")) {
+    if (!s_mods->feature_choice_get(ctx, pkg, fid, option, index, out)) return 0;
+    if (!strcmp(out->value, "arena"))
+      snprintf(out->label, sizeof(out->label), "Versus");
+    else if (!strcmp(out->value, "campaign"))
+      snprintf(out->label, sizeof(out->label), "Campaign");
+    return 1;
+  }
   if (s_active && !strcmp(pkg, kWide) && !strcmp(option, "aspect")) {
     static const char *const ratios[] = {"16:9", "21:9", "32:9"};
     if (index < 0 || index >= 3) return 0;
@@ -199,10 +232,16 @@ static int set_option(void *ctx, const char *pkg, const char *fid, const char *o
   }
   if (s_versus && !strcmp(pkg, kCoop) && !strcmp(option, "rules") && strcmp(value, "arena"))
     return fail("Versus matches use Arena rules.");
+  if (s_active && !strcmp(pkg, kCoop) && !strcmp(option, "cameras") &&
+      !strcmp(value, "independent") && (s_versus || rules_arena()))
+    return fail("Versus uses one shared screen. Switch the room to Campaign for separate cameras.");
   if (s_active && !strcmp(pkg, kWide) && !strcmp(option, "aspect") &&
       strcmp(value, "16:9") && strcmp(value, "21:9") && strcmp(value, "32:9"))
     return fail("Adaptive view is available offline. Choose a fixed ratio for netplay.");
-  return s_mods->feature_set_option(ctx, pkg, fid, option, value);
+  if (!s_mods->feature_set_option(ctx, pkg, fid, option, value)) return 0;
+  if (s_active && !strcmp(pkg, kCoop) && !strcmp(option, "rules") && !strcmp(value, "arena"))
+    s_mods->feature_set_option(ctx, kCoop, "coop", "cameras", "unified");
+  return 1;
 }
 
 static void remember_pick(const char *name, int w0, int w1, int w2) {
@@ -280,6 +319,19 @@ static int lobby_is_arena(void *ctx) {
 static int versus_active(void *ctx) {
   return s_versus || lobby_is_arena(ctx);
 }
+static int versus_local(void *ctx) {
+  (void)ctx;
+  s_error[0] = 0;
+  s_versus = 0;
+  if (!s_mods) return fail("Couch versus needs the bundled co-op mod.");
+  s_mods->feature_enable(s_mods->ctx, kZero, "zero", 0);
+  if (!s_mods->feature_enable(s_mods->ctx, kCoop, "coop", 1))
+    return fail("Couch versus needs X + Zero co-op and the selected X3 ROM.");
+  if (!s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena"))
+    return fail("Could not select Arena rules for couch versus.");
+  s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
+  return 1;
+}
 static int versus_begin(void *ctx) {
   (void)ctx;
   s_versus = 1;
@@ -288,6 +340,7 @@ static int versus_begin(void *ctx) {
   mode_changed(1);
   if (!s_mods) return 0;
   s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
+  s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "cameras", "unified");
   s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
   return 1;
 }
@@ -378,6 +431,7 @@ static int commit_netplay(void *ctx, const char *rom) {
     if (s_net->is_host && s_net->is_host(ctx) && s_mods) {
       s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
       s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
+      s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "cameras", "unified");
     }
     n = s_net->member_count ? s_net->member_count(ctx) : 0;
     for (i = 0; i < n; ++i) {
@@ -408,12 +462,16 @@ static int create(void *ctx, const char *name, char *endpoint, const char *passw
   mode_changed(1);
   if (s_versus && s_mods) {
     s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "rules", "arena");
+    s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "cameras", "unified");
     s_mods->feature_set_option(s_mods->ctx, kCoop, "coop", "player1", "x");
     enable_present_packs();
   }
   if (!validate_plan()) return -1;
   if (s_net->allow_spectators_set) s_net->allow_spectators_set(ctx, 0);
-  return s_net->create(ctx, name, endpoint, password, settings, lan, 2);
+  const char *room = name;
+  if ((s_versus || rules_arena()) && (!name || !name[0] || !strcmp(name, "Netplay Lobby")))
+    room = "Versus";
+  return s_net->create(ctx, room, endpoint, password, settings, lan, 2);
 }
 static int fill_launch(void *ctx, RecompLauncherCNetplayLaunch *out) {
   if (!s_net->fill_launch(ctx, out)) return 0;
@@ -446,6 +504,7 @@ void MmxNetplayConfigureLauncher(RecompLauncherCGameInfo *info) {
   s_callbacks.leave = leave;
   s_callbacks.versus_active = versus_active;
   s_callbacks.versus_begin = versus_begin;
+  s_callbacks.versus_local = versus_local;
   s_callbacks.versus_campaign = versus_campaign;
   s_callbacks.versus_weapon_count = versus_weapon_count;
   s_callbacks.versus_weapon_get = versus_weapon_get;

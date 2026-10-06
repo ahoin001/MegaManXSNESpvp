@@ -104,6 +104,24 @@ static void test_open_loadout_and_clamp(void) {
   assert(inside_x == box.left + 10 && inside_y == box.top + 10);
 }
 
+static void test_retire_stage_slots(void) {
+  uint8_t ram[0x1700];
+  memset(ram, 0, sizeof(ram));
+  ram[0xe68] = 1;
+  ram[0xe68 + 10] = 0x19;
+  ram[0x1228] = 7;
+  ram[0x1228 + 5] = 40;
+  ram[0x1428] = 3;
+  ram[0x1428 + 8] = 12;
+  assert(MmxPvpRetireStageSlot(ram, 0xe68));
+  assert(MmxPvpRetireStageSlot(ram, 0x1428));
+  assert(!MmxPvpRetireStageSlot(ram, 0x1228));
+  assert(!MmxPvpRetireStageSlot(ram, 0xe69));
+  assert(ram[0xe68] == 0 && ram[0xe68 + 10] == 0);
+  assert(ram[0x1428] == 0 && ram[0x1428 + 8] == 0);
+  assert(ram[0x1228] == 7 && ram[0x1228 + 5] == 40);
+}
+
 static void test_versus_kit_and_boot(void) {
   MmxPvpState match;
   uint8_t character[2] = {0, 1};
@@ -152,6 +170,7 @@ int main(void) {
   test_ko_reset_and_match();
   test_cooldown_keeps_energy();
   test_open_loadout_and_clamp();
+  test_retire_stage_slots();
   test_versus_kit_and_boot();
   return 0;
 }

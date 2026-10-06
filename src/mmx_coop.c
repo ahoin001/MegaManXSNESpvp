@@ -595,7 +595,9 @@ bool MmxCoopFrameTick(uint8_t *r) {
    * The other actor must park too; running its motion through that pause
    * lets it fall through the floor. Keep running the native refill task. */
   if(refill_paused(r)) return false;
-  if (scene_tick(r)) return true;
+  /* Versus has no story lock. A capsule or capture scene would freeze the
+   * frame before either seat is updated. */
+  if (!MmxPvpEnabled() && scene_tick(r)) return true;
   if (!state.scene_owner && join_tick(r)) return true;
   if (r[0x1f10]>=6) return false;
   unsigned phases[2]={0,0};
@@ -1589,6 +1591,11 @@ static void object_ghost_hook(CpuState *cpu,uint32_t pc) {
   if(!enabled || !state.initialized) return;
   unsigned at=pc&65535;
   bool call=at==0xd4f6 || at==0xd499;
+  if(call && MmxPvpArenaReady()) {
+    MmxPvpRetireStageSlot(g_ram, cpu->D);
+    interp_bridge_pre_opcode_redirect((pc & 0xff0000) | (at == 0xd4f6 ? 0xd4f9 : 0xd49c));
+    return;
+  }
   if(call) {
     if(shot_ghost.pass==2 && shot_ghost.kind==GHOST_OBJECT) shot_ghost.pass=0;
     else if(!shot_ghost.pass && object_ghost_wanted(cpu->D)) {

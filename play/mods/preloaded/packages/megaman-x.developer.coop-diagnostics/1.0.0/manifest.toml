@@ -1,0 +1,24 @@
+format_version = 1
+id = "megaman-x.developer.coop-diagnostics"
+version = "1.0.0"
+name = "Mega Man X Co-op Physics Diagnostics"
+author = "mstan"
+description = "Writes co-op movement, collision, platform, pickup and freeze traces, including shot contact with enemies, for bug reports. During netplay it also writes a second netplay diagnostics file."
+license = "MIT"
+resolver = "declarative"
+save_compatibility = "shared"
+
+[[target]]
+game_id = "megaman-x-us"
+rom_sha256 = "b8f70a6e7fb93819f79693578887e2c11e196bdf1ac6ddc7cb924b1ad0be2d32"
+
+[[feature]]
+id = "coop-diagnostics"
+name = "Co-op physics diagnostics"
+description = "Write logs/coop-physics-*.csv during co-op play to diagnose movement, platform, pickup and shot-contact problems. If netplay is active, also write netplay diagnostics to logs/coop-netplay-*.csv in the same logs folder."
+group = "Developer"
+default_enabled = false
+
+[[plugin]]
+feature = "coop-diagnostics"
+id = "megaman-x.coop-diagnostics"

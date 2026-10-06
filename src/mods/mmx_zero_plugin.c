@@ -191,12 +191,29 @@ void MmxZeroRegisterHooks(void) {
   for (unsigned i=0;i<sizeof(energy_pcs)/sizeof(energy_pcs[0]);++i)
     interp_bridge_set_pre_opcode_hook(energy_pcs[i],weapon_energy_hook);
 }
+static int read_cfg_path(const char *name, char *out, size_t cap) {
+  char file[4096];
+  FILE *f;
+  if (!out || !cap || !snesrecomp_exe_dir_path(name, file, sizeof(file))) return 0;
+  f = fopen(file, "r");
+  if (!f) return 0;
+  if (!fgets(out, (int)cap, f)) { fclose(f); out[0] = 0; return 0; }
+  fclose(f);
+  while (out[0] && (out[strlen(out) - 1] == '\n' || out[strlen(out) - 1] == '\r'))
+    out[strlen(out) - 1] = 0;
+  return out[0] != 0;
+}
 static int prepare(const char *package, const char *feature, unsigned game, int zero, char path[4096]) {
   const RecompLauncherCModProvider *provider = snes_mod_runtime_launcher_provider_c();
   RecompLauncherCModResource resource = {0};
-  char leaf[100],error[512];
+  char leaf[100],error[512],bundled[4096];
   if (!provider || !provider->feature_resource_get ||
-      !provider->feature_resource_get(provider->ctx,package,feature,0,&resource) || !resource.path[0]) return 0;
+      !provider->feature_resource_get(provider->ctx,package,feature,0,&resource)) return 0;
+  if (!resource.path[0] && zero && read_cfg_path("x3-rom.cfg", bundled, sizeof(bundled)) &&
+      provider->feature_resource_set_path &&
+      provider->feature_resource_set_path(provider->ctx, package, feature, "x3-rom", bundled))
+    snprintf(resource.path, sizeof(resource.path), "%s", bundled);
+  if (!resource.path[0]) return 0;
   snprintf(leaf,sizeof(leaf),"cache/mmx-source/x%u-%s.bin",game,zero?"zero-v7":"weapons-v5");
   if (!snesrecomp_exe_dir_path(leaf,path,4096)) return 0;
   if (MmxSourceAssetsBuild(resource.path,game,zero,path,error,sizeof(error))) return 1;

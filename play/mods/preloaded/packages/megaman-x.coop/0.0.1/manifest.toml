@@ -1,0 +1,112 @@
+format_version = 1
+id = "megaman-x.coop"
+version = "0.0.1"
+name = "X / Zero Co-op"
+author = "mstan"
+description = "Play together as X and Zero with separate health and weapons."
+license = "PolyForm-Noncommercial-1.0.0"
+resolver = "declarative"
+save_compatibility = "requires-same-mods"
+
+[[target]]
+game_id = "megaman-x-us"
+rom_sha256 = "b8f70a6e7fb93819f79693578887e2c11e196bdf1ac6ddc7cb924b1ad0be2d32"
+
+[[feature]]
+id = "coop"
+name = "Co-op"
+description = "Player 2 joins automatically. Hold P2 Select for 1.5 seconds to leave; press Select to rejoin. Start opens each player's weapon menu. Selecting co-op turns off Add Zero."
+group = "Characters"
+default_enabled = false
+
+[[option]]
+feature = "coop"
+id = "player1"
+label = "Player 1 character"
+description = "Player 2 plays as the other character."
+type = "choice"
+default = "x"
+[[option.choice]]
+value = "x"
+label = "X"
+[[option.choice]]
+value = "zero"
+label = "Zero"
+
+[[option]]
+feature = "coop"
+id = "behavior"
+label = "Zero behavior"
+description = "Shared with Add Zero. Modern replaces Zero's buster with a direct saber and adds a double jump and air dash. Special weapons remain available."
+type = "choice"
+default = "x3"
+[[option.choice]]
+value = "x3"
+label = "X3 Behavior"
+[[option.choice]]
+value = "modern"
+label = "Modern"
+
+[[option]]
+feature = "coop"
+id = "cameras"
+label = "Netplay cameras"
+description = "Unified keeps both players on one shared screen. Independent is experimental and may show graphics glitches or camera shaking. The host chooses for both peers; offline play always uses Unified."
+type = "choice"
+default = "unified"
+[[option.choice]]
+value = "unified"
+label = "Unified"
+[[option.choice]]
+value = "independent"
+label = "Independent (Experimental)"
+
+[[option]]
+feature = "coop"
+id = "hud"
+label = "HUD layout"
+description = "Compact stacks X above Zero in two aligned columns. Horizontal places all meters side by side."
+type = "choice"
+default = "compact"
+[[option.choice]]
+value = "compact"
+label = "Compact"
+[[option.choice]]
+value = "horizontal"
+label = "Horizontal"
+
+[[option]]
+feature = "coop"
+id = "rules"
+label = "Match rules"
+description = "Campaign keeps the co-op story. Arena is a 1v1 on one screen, at home on two controllers or in a Versus room. Best of three, shared health, and specials on cooldowns."
+type = "choice"
+default = "campaign"
+[[option.choice]]
+value = "campaign"
+label = "Campaign"
+[[option.choice]]
+value = "arena"
+label = "Arena"
+
+[[resource]]
+feature = "coop"
+id = "x3-rom"
+label = "Mega Man X3 ROM"
+description = "Select your original Mega Man X3 USA ROM."
+format = "file"
+file_patterns = "*.sfc,*.smc"
+file_description = "Mega Man X3 USA ROM"
+shared_key = "megaman-x.source.x3"
+normalized_sha256 = "65b03268afac296330e8ff8d60dd0825879e13ed658b37713c034a3bd074f1d7"
+required = true
+
+[[plugin]]
+feature = "coop"
+id = "megaman-x.coop"
+
+# Claim the original character plugin too: features sharing a plugin are
+# alternatives, so selecting co-op deselects Add Zero and vice versa.
+[[plugin]]
+feature = "coop"
+id = "megaman-x.zero"

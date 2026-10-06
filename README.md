@@ -6,7 +6,9 @@ X3 combat or the optional Modern style with direct saber attacks, a second
 jump, and an air dash.
 
 [Download](https://github.com/mstan/MegaManXSNESRecomp/releases/latest) |
-[Getting started](#quick-start-pre-built-release) | [Netplay setup](docs/netplay.md)
+[Getting started](#quick-start-pre-built-release) |
+[Play versus](#play-versus-from-a-fresh-install) |
+[Netplay setup](docs/netplay.md)
 
 <a href="https://www.youtube.com/watch?v=TDysNWWJ25g">
   <img src="https://i.ytimg.com/vi/TDysNWWJ25g/maxresdefault.jpg" width="880" alt="Watch the Mega Man X Recompiled gameplay showcase on YouTube">
@@ -56,6 +58,7 @@ Rev 1 build.
 | &#9745; | **X2 weapons** | All eight boss weapons and their charged attacks, adapted for X and Zero. |
 | &#9745; | **X3 weapons** | All eight boss weapons and their charged attacks, adapted for X and Zero. |
 | &#9745; | **Netplay** | Two-player online co-op with lobbies and rollback, plus optional fixed widescreen. |
+| &#9745; | **Versus** | A 1v1 arena for two controllers on one PC, or two players online. Best of three, one screen, specials on cooldowns. |
 
 See the [co-op validation notes](docs/coop-port.md) for current limits.
 
@@ -83,6 +86,70 @@ original view or fixed 16:9, 21:9, or 32:9.
 Setup guides: [Zero](docs/zero-0.0.1.md), [X2/X3 weapons](docs/x-weapons-port.md),
 [password saves](docs/password-saves.md), and [netplay](docs/netplay.md).
 No ROMs or extracted assets are included in the downloads.
+
+## Play versus, from a fresh install
+
+Versus uses the same launcher as the story game. You bring the ROMs. The
+download does not include them.
+
+1. Install the game the same way as the [quick start](#quick-start-pre-built-release).
+   Open the launcher and select your **Mega Man X (USA) (Rev 1)** ROM.
+2. Open **Mods**, enable **X / Zero Co-op**, and select your **Mega Man X3
+   USA** ROM on that mod. Co-op will not start without it. Assets extract on
+   your machine the first time.
+3. Optional: enable **X2 weapons** and **X3 weapons** and point each one at
+   your own USA ROM for that game. The X3 weapon mod can reuse the X3 ROM you
+   already picked. Those packs add the specials you can fire in the match.
+4. Open **Controls**. Player 1 needs a keyboard or a controller before any
+   match. For a same-room match, player 2 needs one too, unless you use the
+   **Couch** button below, which assigns a free second gamepad or the player 2
+   keyboard for you.
+
+**Add Zero** and **X / Zero Co-op** cannot both be on. Versus turns co-op on
+and turns Add Zero off.
+
+### Same room
+
+1. Choose **Netplay**.
+2. Select **Couch**.
+3. The game launches on this PC. Controller 1 is X. Controller 2 is Zero.
+   Both players can use every weapon you enabled. There is no lobby and no
+   three-weapon pick.
+
+Start the cartridge as usual: title screen, then a stage. Player 2 appears
+when the stage has a safe place to land. The arena begins once both players
+are in that stage.
+
+### Online
+
+Both players need the same build, their own X1 USA Rev 1 ROM, and their own
+X3 USA ROM. Each person only configures **Player 1** on that computer. The
+room assigns the seat.
+
+1. Choose **Netplay**, then online or LAN.
+2. Select **Versus**. The room is named Versus if you leave the name blank.
+3. The host starts the room. The other player joins it.
+4. Each player picks three weapons. The match will not start until both picks
+   are in. Player 1's seat is X. Player 2's seat is Zero.
+5. The host starts the match.
+
+The room stays on one shared screen. Separate cameras are for campaign co-op,
+not for Versus.
+
+### What the match is
+
+The fight is best of three. A round ends when one player runs out of health,
+holds for about two seconds, then both players respawn with the same health
+they started with. Specials recharge on a timer instead of spending weapon
+energy. The buster stays available.
+
+The camera locks to one screen around the two players. Enemies and their
+shots are cleared, and story scenes do not freeze the fight. The floor, walls,
+and any pits or spikes are still the stage you entered. There is no separate
+arena map yet. Pick a flat part of a stage if the entrance is a bad duel spot.
+
+Campaign co-op is unchanged. Leave **Match rules** on **Campaign**, or never
+press **Couch** or **Versus**, and you still play the story together.
 
 ## Controls and co-op
 

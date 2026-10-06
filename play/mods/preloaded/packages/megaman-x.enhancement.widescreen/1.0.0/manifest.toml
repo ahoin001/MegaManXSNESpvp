@@ -1,0 +1,44 @@
+format_version = 1
+id = "megaman-x.enhancement.widescreen"
+version = "1.0.0"
+name = "Mega Man X Widescreen"
+author = "mstan"
+description = "Adaptive widescreen stage rendering with your selected display pixel shape, edge-anchored HUD and expanded sprite capacity."
+license = "MIT"
+resolver = "declarative"
+save_compatibility = "shared"
+
+[[target]]
+game_id = "megaman-x-us"
+rom_sha256 = "b8f70a6e7fb93819f79693578887e2c11e196bdf1ac6ddc7cb924b1ad0be2d32"
+
+[[feature]]
+id = "widescreen"
+name = "Widescreen"
+description = "Extend the stage view with live enemies, preserved encounter timing, and anchored health bars."
+group = "Display"
+default_enabled = false
+
+[[option]]
+feature = "widescreen"
+id = "aspect"
+label = "View aspect ratio"
+description = "Fit the view to the window, or select a fixed ratio. Settings > Display Aspect controls pixel and sprite proportions in every mode."
+type = "choice"
+default = "adaptive"
+[[option.choice]]
+value = "adaptive"
+label = "Adaptive"
+[[option.choice]]
+value = "16:9"
+label = "16:9"
+[[option.choice]]
+value = "21:9"
+label = "21:9"
+[[option.choice]]
+value = "32:9"
+label = "32:9"
+
+[[plugin]]
+feature = "widescreen"
+id = "megaman-x.widescreen"
